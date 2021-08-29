@@ -155,31 +155,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                     min_loss = epoch_loss  # update min_loss
                     print('Best val min_loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch, num_epochs - 1))
                     best_model_wts = copy.deepcopy(model.state_dict())
-
-            # 删掉acc 因为回归问题不存在acc
-            # epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-            #
-            # print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
-            #
-            # # deep copy the model
-            # if phase == 'val' and epoch_acc > best_acc:
-            #     best_acc = epoch_acc
-            #     best_model_wts = copy.deepcopy(model.state_dict())
-            # if phase == 'val':
-            #     val_acc_history.append(epoch_acc)
-
         print()
-        # 制定训练序号的同时 保存模块参数（卷积核权重）
-    #     if epoch % 19 == 0:
-    #         for name, parameters in model.named_parameters():
-    #             # print(name, ':', parameters.size())
-    #             parm[name] = parameters.detach().cpu().numpy()
-    #         print(parm['layer1.0.conv1.weight'][0, 0, :, :])
-    #         # kernal = (kernal, parm['layer1.0.conv1.weight'][0, 0, :, :])
-    #         kernal = np.append(kernal, parm['layer1.0.conv1.weight'][0, 0, :, :], axis=0)
-    #
-    # np.savetxt("Parm.txt", kernal)
-
     time_elapsed = time.time() - since
     print('Training complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     # print('Best val Acc: {:4f}'.format(best_acc))
@@ -191,20 +167,6 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
     torch.save(best_model_wts, save_path)
     return model, train_acc_history, val_acc_history, result
 
-
-######################################################################
-# Set Model Parameters’ .requires_grad attribute
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
-# This helper function sets the ``.requires_grad`` attribute of the
-# parameters in the model to False when we are feature extracting. By
-# default, when we load a pretrained model all of the parameters have
-# ``.requires_grad=True``, which is fine if we are training from scratch
-# or finetuning. However, if we are feature extracting and only want to
-# compute gradients for the newly initialized layer then we want all of
-# the other parameters to not require gradients. This will make more sense
-# later.
-#
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
@@ -444,7 +406,8 @@ class customData(Dataset):
                 print("Cannot transform image: {}".format(img_name))
         return img, label
 
-### 读取文本的第k列数值data ###
+
+
 def loadCol(infile, k):
     f = open(infile, 'r')
     sourceInLine = f.readlines()
@@ -453,14 +416,11 @@ def loadCol(infile, k):
         temp1 = line.strip('\n')
         temp2 = temp1.split('\t')
         dataset.append(temp2[k])
-    # for i in range(0, len(dataset)):
-    #     for j in range(k):
-    #         #dataset[i].append(float(dataset[i][j]))
-    #         dataset[i][j] = float(dataset[i][j])
     if dataset[0].split('.')[-1] != 'png':
         dataset = [float(s) for s in dataset]
     return dataset
-### 读取文本的第k列字符串data ###
+
+
 def loadColStr(infile, k):
     f = open(infile, 'r')
     sourceInLine = f.readlines()
@@ -475,6 +435,8 @@ def loadColStr(infile, k):
     #         #dataset[i].append(float(dataset[i][j]))
     #         dataset[i][j] = float(dataset[i][j])
     return dataset
+
+
 def Normalize(data):
     # res = []
     data = np.array(data)
@@ -483,13 +445,13 @@ def Normalize(data):
     res = (data - meanVal) / stdVal
     return res, meanVal, stdVal
 
+
 def InvNormalize(data, meanVal, stdVal):
-    # data为tensor时
     # data = data.cpu().numpy()
 
-    # data为list时
     data = np.array(data)
     return (data*stdVal)+meanVal
+
 
 if __name__ == '__main__':
     print("PyTorch Version: ", torch.__version__)
@@ -512,29 +474,7 @@ if __name__ == '__main__':
     # output path
     out_path = './output'
     if not os.path.exists(out_path):
-        # 如果不存在则创建目录
         os.makedirs(out_path)
-    # Print the model we just instantiated
-    # print(model_ft)
-
-    ### Print computational params ###
-    # from torchstat import stat
-    # stat(model_ft, (3, 224, 224))
-    #
-    # from thop import profile
-    # input = torch.randn(1, 3, 224, 224)
-    # macs, params = profile(model_ft, inputs=(input,))
-    # print('The model Params: {:.2f}M, MACs: {:.2f}M'.format(params/10e6, macs/10e6))
-
-    ######################################################################
-    # Load Data
-    # ---------
-    #
-    # Now that we know what the input size must be, we can initialize the data
-    # transforms, image datasets, and the dataloaders. Notice, the models were
-    # pretrained with the hard-coded normalization values, as described
-    # `here <https://pytorch.org/docs/master/torchvision/models.html>`__.
-    #
 
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -557,21 +497,6 @@ if __name__ == '__main__':
 
     print("Initializing Datasets and Dataloaders...")
 
-    # 用默认的ImageFolder加载训练数据
-    # # Create training and validation datasets
-    # image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x), data_transforms[x]) for x in ['train', 'val']}
-    # # Create training and validation dataloaders
-    # dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size, shuffle=True, num_workers=4) for x in ['train', 'val']}
-
-    # 用自定义的customData加载训练数据
-    # 训练集1
-    # image_datasets = {x: customData(img_path='./data/dlp_data/training',
-    #                                 txt_path=('./data/dlp_data/' + x + '.txt'),
-    #                                 data_transforms=data_transforms,
-    #                                 dataset=x) for x in ['train', 'val']}
-
-    # 训练集2
-
     image_datasets = {x: customData(img_path=infile,
                                     txt_path=os.path.join(infile, (x + '.txt')),
                                     data_transforms=data_transforms,
@@ -586,28 +511,6 @@ if __name__ == '__main__':
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-
-    ######################################################################
-    # Create the Optimizer
-    # --------------------
-    #
-    # Now that the model structure is correct, the final step for finetuning
-    # and feature extracting is to create an optimizer that only updates the
-    # desired parameters. Recall that after loading the pretrained model, but
-    # before reshaping, if ``feature_extract=True`` we manually set all of the
-    # parameter’s ``.requires_grad`` attributes to False. Then the
-    # reinitialized layer’s parameters have ``.requires_grad=True`` by
-    # default. So now we know that *all parameters that have
-    # .requires_grad=True should be optimized.* Next, we make a list of such
-    # parameters and input this list to the SGD algorithm constructor.
-    #
-    # To verify this, check out the printed parameters to learn. When
-    # finetuning, this list should be long and include all of the model
-    # parameters. However, when feature extracting this list should be short
-    # and only include the weights and biases of the reshaped layers.
-    #
-
     # Send the model to GPU
     model_ft = model_ft.to(device)
 
@@ -634,60 +537,12 @@ if __name__ == '__main__':
     # optimizer_ft = optim.SGD(params_to_update, lr, momentum=0.9)
     optimizer_ft = optim.Adam(params_to_update, lr, weight_decay=0.05)
 
-    ######################################################################
-    # Run Training and Validation Step
-    # --------------------------------
-    #
-    # Finally, the last step is to setup the loss for the model, then run the
-    # training and validation function for the set number of epochs. Notice,
-    # depending on the number of epochs this step may take a while on a CPU.
-    # Also, the default learning rate is not optimal for all of the models, so
-    # to achieve maximum accuracy it would be necessary to tune for each model
-    # separately.
-    #
-
     # Setup the loss fxn
     criterion = nn.MSELoss()
 
-    ### 使用迁移学习 ###
     # Train and evaluate
     model_ft, train_hist, val_hist, result = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))
 
-
-    ######################################################################
-    ### 比较 迁移学习和普通学习 的训练结果（可选） ###
-    # Comparison with Model Trained from Scratch
-    # ------------------------------------------
-    #
-    # Just for fun, lets see how the model learns if we do not use transfer
-    # learning. The performance of finetuning vs. feature extracting depends
-    # largely on the dataset but in general both transfer learning methods
-    # produce favorable results in terms of training time and overall accuracy
-    # versus a model trained from scratch.
-    #
-
-    ### 不使用迁移学习 ###
-    # Initialize the non-pretrained version of the model used for this run
-    # scratch_model, _ = initialize_model(model_name, num_classes, feature_extract=False, use_pretrained=False)
-    # scratch_model = scratch_model.to(device)
-    # scratch_optimizer = optim.SGD(scratch_model.parameters(), lr, momentum=0.9)
-    # # scratch_optimizer = optim.Adam(scratch_model.parameters(), lr=0.01, weight_decay=0.01)
-    # scratch_criterion = nn.MSELoss()
-    # model, train_hist, val_hist, result = train_model(scratch_model, dataloaders_dict, scratch_criterion, scratch_optimizer, num_epochs=num_epochs, is_inception=(model_name == "inception"))
-
-    # Plot the training curves of validation accuracy vs. number
-    #  of training epochs for the transfer learning method and
-    #  the model trained from scratch
-    # ohist = []
-    # shist = []
-
-    # ohist = [h.cpu().numpy() for h in hist]
-    # shist = [h.cpu().numpy() for h in scratch_hist]
-
-    # ohist = hist
-    # shist = scratch_hist
-
-    # 绘制训练和验证的损失曲线
     plt.figure()
     plt.title("Train and val Loss history vs. Number of Training Epochs")
     plt.xlabel("Training Epochs")
@@ -706,12 +561,11 @@ if __name__ == '__main__':
 
     #######################################################################
     # -----------------------Evaluation--------------------------------
-    ### 逆归一化，输出 val 的‘预测的结果’ ###
     test_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
     _, meanVal, stdVal = Normalize(test_lab)
     result = InvNormalize(result, meanVal, stdVal)
 
-    ### 逆归一化，输出 test 的‘预测的结果’ ###
+    ### test ###
     # test_img_path = loadCol(os.path.join(infile, 'test.txt'), 0)
     # test_lab = loadCol(os.path.join(infile, 'test.txt'), 1)
     # _, meanVal, stdVal = Normalize(test_lab)
