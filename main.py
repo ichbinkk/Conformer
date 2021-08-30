@@ -26,8 +26,17 @@ import models
 
 def get_args_parser():
     parser = argparse.ArgumentParser('DeiT training and evaluation script', add_help=False)
-    parser.add_argument('--batch-size', default=2, type=int)
-    parser.add_argument('--epochs', default=300, type=int)
+    parser.add_argument('--batch-size', default=32, type=int)
+    parser.add_argument('--epochs', default=10, type=int)
+
+    # Dataset parameters
+    parser.add_argument('--data-path', default='../dataset/samples', type=str,
+                        help='dataset path')
+    parser.add_argument('--data-set', default='',
+                        type=str, help='Image Net dataset path')
+    parser.add_argument('--inat-category', default='name',
+                        choices=['kingdom', 'phylum', 'class', 'order', 'supercategory', 'family', 'genus', 'name'],
+                        type=str, help='semantic granularity')
 
     # Model parameters
     # Conformer_tiny_patch16, deit_base_patch16_224
@@ -126,14 +135,7 @@ def get_args_parser():
     parser.add_argument('--mixup-mode', type=str, default='batch',
                         help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
 
-    # Dataset parameters
-    parser.add_argument('--data-path', default='../dataset/covid', type=str,
-                        help='dataset path')
-    parser.add_argument('--data-set', default='',
-                        type=str, help='Image Net dataset path')
-    parser.add_argument('--inat-category', default='name',
-                        choices=['kingdom', 'phylum', 'class', 'order', 'supercategory', 'family', 'genus', 'name'],
-                        type=str, help='semantic granularity')
+
     # * Finetuning params
     parser.add_argument('--finetune', default='', help='finetune from checkpoint')
 

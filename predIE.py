@@ -1,9 +1,6 @@
-"""
-Finetuning Torchvision Models
-=============================
+""" PredIE
 
-**Author:** `ichbinkk`
-
+Hacked together by / Copyright 2021 Wang Kang
 """
 
 from __future__ import print_function
@@ -24,11 +21,12 @@ from torch.utils.data import Dataset
 from PIL import Image
 import timm.models as tm
 import argparse
-# 衡量误差
-from sklearn.metrics import mean_squared_error # 均方误差
-from sklearn.metrics import mean_absolute_error # 平方绝对误差
-from sklearn.metrics import r2_score # R square
 
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import r2_score
+
+# For Conformer
 from timm.models import create_model
 import models
 
@@ -49,7 +47,7 @@ parser.add_argument('--data_dir', metavar='DIR', default='../ECC',
 '''
 Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
-alexnet, vgg, squeezenet, densenet, inception]
+alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16]
 '''
 parser.add_argument('--model', default='conformer', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
@@ -103,8 +101,6 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
             # Iterate over data.
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
-                # labels = labels.to(device)
-                # labels = torch.tensor(labels, dtype=torch.float) #复制tensor
                 labels = labels.to(device)
 
                 # zero the parameter gradients
@@ -113,10 +109,6 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                 # forward
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    # Get model outputs and calculate loss
-                    # Special case for inception because in training it has an auxiliary output. In train
-                    #   mode we calculate the loss by summing the final output and the auxiliary output
-                    #   but in testing we only consider the final output.
                     if is_inception and phase == 'train':
                         # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
                         outputs, aux_outputs = model(inputs)
@@ -126,24 +118,35 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                         loss = loss1 + 0.4*loss2
                     else:
                         outputs = model(inputs)
-                        outputs = outputs.view(-1)
-                        loss = criterion(outputs, labels)
+                        if isinstance(outputs, list):
+                            # Conformer
+                            for i, o in enumerate(outputs):
+                                outputs[i] = o.view(-1)
+                            loss_list = [criterion(o, labels) / len(outputs) for o in outputs]
+                            loss = sum(loss_list)
+                        else:
+                            outputs = outputs.view(-1)
+                            loss = criterion(outputs, labels)
+
                         if phase == 'val' and epoch == num_epochs-1:
                             # result.append(outputs)
-                            temp = outputs.detach().cpu().numpy()
-                            for i in range(outputs.size()[0]):
-                                result.append(temp[i])
+                            if isinstance(outputs, list):
+                                # Conformer
+                                res = (outputs[0]+outputs[1])/2
+                                temp = res.detach().cpu().numpy()
+                                for i in range(o.size()[0]):
+                                    result.append(temp[i])
+                            else:
+                                temp = outputs.detach().cpu().numpy()
+                                for i in range(outputs.size()[0]):
+                                    result.append(temp[i])
 
-                    # _, preds = torch.max(outputs, 1)
-
-                    # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
 
-                # statistics
+                # save loss value
                 running_loss += loss.item() * inputs.size(0)
-                # running_corrects += torch.sum(preds == labels.data)
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             print('{} Loss: {:.4f}'.format(phase, epoch_loss))
@@ -353,6 +356,7 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
 
     return model_ft, input_size
 
+
 # use PIL Image to read image
 def default_loader(path):
     try:
@@ -361,6 +365,7 @@ def default_loader(path):
     except:
         print("Cannot read image: {}".format(path))
 
+
 # define your Dataset. Assume each line in your .txt file is [name/tab/label], for example:0001.jpg 1
 class customData(Dataset):
     def __init__(self, img_path, txt_path, dataset = '', data_transforms=None, loader = default_loader):
@@ -368,8 +373,6 @@ class customData(Dataset):
             lines = input_file.readlines()
             self.img_name = []
             self.img_label = []
-            # self.img_name = [os.path.join(img_path, line.strip().split('\t')[0]) for line in lines]
-            # self.img_label = [float(line.strip().split('\t')[1]) for line in lines]
             for line in lines:
                 img_name = line.strip().split('\t')[0]
                 img_prefix = img_name.split('-')[0]
@@ -405,7 +408,6 @@ class customData(Dataset):
             except:
                 print("Cannot transform image: {}".format(img_name))
         return img, label
-
 
 
 def loadCol(infile, k):
@@ -514,11 +516,6 @@ if __name__ == '__main__':
     # Send the model to GPU
     model_ft = model_ft.to(device)
 
-    # Gather the parameters to be optimized/updated in this run. If we are
-    #  finetuning we will be updating all parameters. However, if we are
-    #  doing feature extract method, we will only update the parameters
-    #  that we have just initialized, i.e. the parameters with requires_grad
-    #  is True.
     params_to_update = model_ft.parameters()
     print("Params to learn:")
     if feature_extract:
@@ -556,8 +553,6 @@ if __name__ == '__main__':
     plt.show()
     hist = np.vstack((train_hist, val_hist))
     np.savetxt("./output/Hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), hist.T)
-    # np.savetxt("./output/train_hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), train_hist)
-    # np.savetxt("./output/val_hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), val_hist)
 
     #######################################################################
     # -----------------------Evaluation--------------------------------
@@ -588,43 +583,35 @@ if __name__ == '__main__':
     #     out_v = out[0][0] * stdVal + meanVal
     #     # print(out_v)
     #     result.append(out_v)
-
-    # 绘制期望和预测的结果
+    ############
     plt.figure()
     plt.title(model_name + "_" +str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
-    # plt.xlim((0, 200))
-    # plt.ylim((0, 450000))
     plt.legend()
     plt.show()
-    # 输出预测的结果到txt文件
     res = np.vstack((test_lab, result))
     np.savetxt('./output/' + 'Results of ' + fn +"_" + model_name +"_"+ str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), res.T, fmt='%s')
-
-    ### 分析'每层误差信息' ###
+    ############
     result = np.array(result)
     test_lab = np.array(test_lab)
-    print('[每层误差信息]')
+    print('[Layered error]')
     error = (result - test_lab)/test_lab
     print('Mean(error): {:.2%}.'.format(np.mean(error)))
     print('Max(error): {:.2%}.'.format(np.max(error)))
     print('Min(error): {:.2%}.'.format(np.min(error)))
     print('Std(error): {:.2f}.'.format(np.std(error)))
-    # 调用误差 RMSE, Mae, R^2
     Rs = mean_squared_error(test_lab, result) ** 0.5
     Mae = mean_absolute_error(test_lab, result)
     R2_s = r2_score(test_lab, result)
     print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
-
-    ### 分析'总误差信息' ###
-    print('[总误差信息]')
+    ############
+    print('[Total models error]')
     E1 = np.sum(test_lab)
     E2 = np.sum(result)
-    Er = (E1-E2)/E2
+    Er = (E1 - E2)/E2
     print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
-
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), E1, E2, Er, Rs, Mae, R2_s]
     np.savetxt('./output/' + 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size),
                np.array(res_error), fmt='%s')
