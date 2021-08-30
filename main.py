@@ -27,7 +27,7 @@ import models
 def get_args_parser():
     parser = argparse.ArgumentParser('DeiT training and evaluation script', add_help=False)
     parser.add_argument('--batch-size', default=32, type=int)
-    parser.add_argument('--epochs', default=10, type=int)
+    parser.add_argument('--epochs', default=2, type=int)
 
     # Dataset parameters
     parser.add_argument('--data-path', default='../dataset/samples', type=str,

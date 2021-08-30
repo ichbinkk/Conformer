@@ -348,6 +348,11 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
             drop_path_rate=args.drop_path,
             drop_block_rate=args.drop_block,
         )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
         input_size = 224
 
     else:
