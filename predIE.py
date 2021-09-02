@@ -1,6 +1,5 @@
 """ PredIE
-
-Hacked together by / Copyright 2021 Wang Kang
+Copyright 2021 Wang Kang
 """
 
 from __future__ import print_function
@@ -29,6 +28,9 @@ from sklearn.metrics import r2_score
 # For Conformer
 from timm.models import create_model
 import models
+
+# output path
+out_path = os.path.join('./output', time.strftime("%Y%m%d-%H%M%S", time.localtime()))
 
 
 # Number of classes in the dataset
@@ -166,7 +168,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
     # load best model weights
     model.load_state_dict(best_model_wts)
     # save best model weights
-    save_path = './output/' + time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()) + '.pth'
+    save_path = os.path.join(out_path, 'best_model.pth')
     torch.save(best_model_wts, save_path)
     return model, train_acc_history, val_acc_history, result
 
@@ -382,10 +384,9 @@ class customData(Dataset):
                 img_name = line.strip().split('\t')[0]
                 img_prefix = img_name.split('-')[0]
                 # if img_prefix is not None:
-                if img_prefix in prefixs:   # 指定训练数据位置
+                if img_prefix in prefixs:
                     self.img_name.append(os.path.join(img_path,img_name))
                     self.img_label.append(float(line.strip().split('\t')[1]))
-        # 对y做归一化
         ln = len(self.img_label)
         y = self.img_label
         y = torch.tensor(y)
@@ -471,17 +472,17 @@ if __name__ == '__main__':
     num_epochs = args.epochs
     use_pretrained = args.use_pretrained
     feature_extract = args.feature_extract
-
+    # output make dir
+    out_path = out_path + '_' + model_name
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
     # get data Dir name
     fn = infile.split('/')[-1]
 
     # Initialize the model for this run
     model_ft, input_size = initialize_model(model_name, num_classes, feature_extract, use_pretrained)
 
-    # output path
-    out_path = './output'
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
+
 
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -554,10 +555,10 @@ if __name__ == '__main__':
     # plt.ylim((0, 2.))
     # plt.xticks(np.arange(1, num_epochs+1, 1.0))
     plt.legend()
-    plt.savefig(os.path.join('./output/', ('Hist of ' + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + '.png')))
+    plt.savefig(os.path.join(out_path, 'Hist of ' + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + '.png'))
     plt.show()
     hist = np.vstack((train_hist, val_hist))
-    np.savetxt("./output/Hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), hist.T)
+    np.savetxt(os.path.join(out_path, "Hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), hist.T)
 
     #######################################################################
     # -----------------------Evaluation--------------------------------
@@ -590,14 +591,14 @@ if __name__ == '__main__':
     #     result.append(out_v)
     ############
     plt.figure()
-    plt.title(model_name + "_" +str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
+    plt.title(model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
     plt.show()
     res = np.vstack((test_lab, result))
-    np.savetxt('./output/' + 'Results of ' + fn +"_" + model_name +"_"+ str(num_epochs) + "_" + str(lr) + "_" + str(batch_size), res.T, fmt='%s')
+    np.savetxt(os.path.join(out_path, 'Results of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), res.T, fmt='%s')
     ############
     result = np.array(result)
     test_lab = np.array(test_lab)
@@ -618,7 +619,7 @@ if __name__ == '__main__':
     Er = (E1 - E2)/E2
     print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), E1, E2, Er, Rs, Mae, R2_s]
-    np.savetxt('./output/' + 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size),
+    np.savetxt(os.path.join(out_path, 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)),
                np.array(res_error), fmt='%s')
 
 
