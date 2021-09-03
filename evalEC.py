@@ -48,13 +48,15 @@ parser.add_argument('--data_dir', metavar='DIR', default='../ECC',
                     help='path to dataset')
 parser.add_argument('--dict_dir', metavar='DIR', default='./best_model.pth',
                     help='path to dict')
+parser.add_argument('--phase', default='test', type=str, metavar='NAME',
+                    help='Phase of eval dataset (default: )')
 '''
 Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16]
 '''
 parser.add_argument('--model', default='conformer', type=str, metavar='MODEL',
-                    help='Name of model to train (default: "resnet"')
+                    help='Name of model to train (default: "resnet")')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('-ep', '--epochs', type=int, default=2, metavar='N',
@@ -73,7 +75,7 @@ parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
 
 # set train and val data prefixs
 # prefixs = ['A1','A2','B1','B2','C1','C2','D1','D2','E1','E2']
-prefixs = ['A1','A2','B1','B2','C1','C2', 'D2']
+prefixs = ['A1','A2','B1','B2','C1','C2', 'D2','E1']
 # prefixs = ['A1','B1','C2', 'D2', 'E1']
 
 
@@ -470,14 +472,19 @@ if __name__ == '__main__':
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
+        'test': transforms.Compose([
+            transforms.Resize([input_size, input_size]),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
     }
 
     print("Initializing Datasets and Dataloaders...")
 
     image_datasets = customData(img_path=infile,
-                                    txt_path=os.path.join(infile, ('val.txt')),
+                                    txt_path=os.path.join(infile, args.phase+'.txt'),
                                     data_transforms=data_transforms,
-                                    dataset='val')
+                                    dataset=args.phase)
 
     # wrap your data and label into Tensor
     dataloaders_dict = torch.utils.data.DataLoader(image_datasets,
@@ -517,11 +524,11 @@ if __name__ == '__main__':
 
     #######################################################################
     # -----------------------plot and save result-------------------------
-    test_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
+    test_lab = loadColStr(os.path.join(infile, args.phase+'.txt'), 1)
     _, meanVal, stdVal = Normalize(test_lab)
     result = InvNormalize(result, meanVal, stdVal)
 
-    ### test ###
+    ### eval image one by one ###
     # test_img_path = loadCol(os.path.join(infile, 'test.txt'), 0)
     # test_lab = loadCol(os.path.join(infile, 'test.txt'), 1)
     # _, meanVal, stdVal = Normalize(test_lab)
@@ -544,16 +551,17 @@ if __name__ == '__main__':
     #     out_v = out[0][0] * stdVal + meanVal
     #     # print(out_v)
     #     result.append(out_v)
-    ############
+    ####################################
     plt.figure()
     plt.title(model_name + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
+    plt.savefig(os.path.join(out_path, 'Compare of ' + fn + "_" + model_name + '.png'))
     plt.show()
     res = np.vstack((test_lab, result))
-    np.savetxt(os.path.join(out_path, 'Eval results of ' + fn + "_" + model_name + "_" + str(batch_size)), res.T, fmt='%s')
+    np.savetxt(os.path.join(out_path, 'Eval results of ' + fn + "_" + model_name), res.T, fmt='%s')
     ############
     result = np.array(result)
     test_lab = np.array(test_lab)
@@ -573,8 +581,8 @@ if __name__ == '__main__':
     E2 = np.sum(result)
     Er = (E1 - E2)/E2
     print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
-    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), E1, E2, Er, Rs, Mae, R2_s]
-    np.savetxt(os.path.join(out_path, 'Eval error of ' + fn + "_" + model_name + "_" + str(lr) + "_" + str(batch_size)),
+    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
+    np.savetxt(os.path.join(out_path, 'Eval error of ' + fn + "_" + model_name),
                np.array(res_error), fmt='%s')
 
 
