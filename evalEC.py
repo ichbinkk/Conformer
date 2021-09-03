@@ -1,4 +1,4 @@
-""" PredIE
+""" evalEC
 Copyright 2021 Wang Kang
 """
 
@@ -30,7 +30,7 @@ from timm.models import create_model
 import models
 
 # output path
-out_path = os.path.join('./output', time.strftime("%Y%m%d-%H%M%S", time.localtime()))
+out_path = os.path.join('./eval', time.strftime("%Y%m%d-%H%M%S", time.localtime()))
 
 
 # Number of classes in the dataset
@@ -46,6 +46,8 @@ parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # Dataset / Model parameters
 parser.add_argument('--data_dir', metavar='DIR', default='../ECC',
                     help='path to dataset')
+parser.add_argument('--dict_dir', metavar='DIR', default='./best_model.pth',
+                    help='path to dict')
 '''
 Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
@@ -75,17 +77,14 @@ prefixs = ['A1','A2','B1','B2','C1','C2', 'D2']
 # prefixs = ['A1','B1','C2', 'D2', 'E1']
 
 
-def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_inception=False):
+def eval_model(model, dataloaders, criterion, optimizer, num_epochs=1, is_inception=False):
     since = time.time()
-
     train_acc_history = []
     val_acc_history = []
     result = []
 
-    kernal = np.empty((0, 3))
-
-    best_model_wts = copy.deepcopy(model.state_dict())
-    best_epoch = 0
+    model.load_state_dict(torch.load(args.dict_dir))
+    # best_model_wts = copy.deepcopy(model.state_dict())
     min_loss = 999999
 
     for epoch in range(num_epochs):
@@ -93,86 +92,60 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
         print('-' * 10)
 
         # Each epoch has a training and validation phase
-        for phase in ['train', 'val']:
-            if phase == 'train':
-                model.train()  # Set model to training mode
+        model.eval()   # Set model to evaluate mode
+
+        running_loss = 0.0
+        running_corrects = 0
+
+        # Iterate over data.
+        for inputs, labels in dataloaders:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward
+            # track history if only in train
+            torch.set_grad_enabled(False)
+            outputs = model(inputs)
+            if isinstance(outputs, list):
+                # Conformer
+                for i, o in enumerate(outputs):
+                    outputs[i] = o.view(-1)
+                loss_list = [criterion(o, labels) / len(outputs) for o in outputs]
+                loss = sum(loss_list)
             else:
-                model.eval()   # Set model to evaluate mode
+                outputs = outputs.view(-1)
+                loss = criterion(outputs, labels)
 
-            running_loss = 0.0
-            running_corrects = 0
-
-            # Iterate over data.
-            for inputs, labels in dataloaders[phase]:
-                inputs = inputs.to(device)
-                labels = labels.to(device)
-
-                # zero the parameter gradients
-                optimizer.zero_grad()
-
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == 'train'):
-                    if is_inception and phase == 'train':
-                        # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
-                        outputs, aux_outputs = model(inputs)
-                        outputs = outputs.view(-1)
-                        loss1 = criterion(outputs, labels)
-                        loss2 = criterion(aux_outputs, labels)
-                        loss = loss1 + 0.4*loss2
-                    else:
-                        outputs = model(inputs)
-                        if isinstance(outputs, list):
-                            # Conformer
-                            for i, o in enumerate(outputs):
-                                outputs[i] = o.view(-1)
-                            loss_list = [criterion(o, labels) / len(outputs) for o in outputs]
-                            loss = sum(loss_list)
-                        else:
-                            outputs = outputs.view(-1)
-                            loss = criterion(outputs, labels)
-
-                        if phase == 'val' and epoch == num_epochs-1:
-                            # result.append(outputs)
-                            if isinstance(outputs, list):
-                                # Conformer
-                                res = (outputs[0]+outputs[1])/2
-                                temp = res.detach().cpu().numpy()
-                                for i in range(o.size()[0]):
-                                    result.append(temp[i])
-                            else:
-                                temp = outputs.detach().cpu().numpy()
-                                for i in range(outputs.size()[0]):
-                                    result.append(temp[i])
-
-                    if phase == 'train':
-                        loss.backward()
-                        optimizer.step()
-
+            if epoch == num_epochs-1:
+                # result.append(outputs)
+                if isinstance(outputs, list):
+                    # Conformer
+                    res = (outputs[0]+outputs[1])/2
+                    temp = res.detach().cpu().numpy()
+                    for i in range(o.size()[0]):
+                        result.append(temp[i])
+                else:
+                    temp = outputs.detach().cpu().numpy()
+                    for i in range(outputs.size()[0]):
+                        result.append(temp[i])
                 # save loss value
                 running_loss += loss.item() * inputs.size(0)
-
-            epoch_loss = running_loss / len(dataloaders[phase].dataset)
-            print('{} Loss: {:.4f}'.format(phase, epoch_loss))
-            if phase == 'train':
-                train_acc_history.append(epoch_loss)
-            if phase == 'val':
-                val_acc_history.append(epoch_loss)
-                if epoch_loss < min_loss:
-                    min_loss = epoch_loss  # update min_loss
-                    print('Best val min_loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch, num_epochs - 1))
-                    best_model_wts = copy.deepcopy(model.state_dict())
-                    best_epoch = epoch
+        epoch_loss = running_loss / len(dataloaders.dataset)
+        val_acc_history.append(epoch_loss)
+        print('Eval loss: {:.2f}'.format(epoch_loss))
         print()
     time_elapsed = time.time() - since
-    print('Training complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+    print('Eval complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     # print('Best val Acc: {:4f}'.format(best_acc))
 
     # load best model weights
-    model.load_state_dict(best_model_wts)
+    # model.load_state_dict(best_model_wts)
     # save best model weights
-    save_path = os.path.join(out_path, args.model + '_' + best_epoch + '_' + 'best_model.pth')
-    torch.save(best_model_wts, save_path)
+    # save_path = os.path.join(out_path, 'best_model.pth')
+    # torch.save(best_model_wts, save_path)
     return model, train_acc_history, val_acc_history, result
 
 
@@ -441,10 +414,6 @@ def loadColStr(infile, k):
         temp2 = temp1.split('\t')
         if temp2[0].split('-')[0] in prefixs:
             dataset.append(float(temp2[k]))
-    # for i in range(0, len(dataset)):
-    #     for j in range(k):
-    #         #dataset[i].append(float(dataset[i][j]))
-    #         dataset[i][j] = float(dataset[i][j])
     return dataset
 
 
@@ -472,23 +441,20 @@ if __name__ == '__main__':
     infile = args.data_dir
     model_name = args.model
     batch_size = args.batch_size
-    num_epochs = args.epochs
     use_pretrained = args.use_pretrained
     feature_extract = args.feature_extract
+
     # output make dir
     out_path = out_path + '_' + model_name
     if not os.path.exists(out_path):
         os.makedirs(out_path)
+
     # get data Dir name
     fn = infile.split('/')[-1]
 
     # Initialize the model for this run
     model_ft, input_size = initialize_model(model_name, num_classes, feature_extract, use_pretrained)
 
-
-
-    # Data augmentation and normalization for training
-    # Just normalization for validation
     data_transforms = {
         'train': transforms.Compose([
             # transforms.RandomResizedCrop(input_size),
@@ -508,17 +474,17 @@ if __name__ == '__main__':
 
     print("Initializing Datasets and Dataloaders...")
 
-    image_datasets = {x: customData(img_path=infile,
-                                    txt_path=os.path.join(infile, (x + '.txt')),
+    image_datasets = customData(img_path=infile,
+                                    txt_path=os.path.join(infile, ('val.txt')),
                                     data_transforms=data_transforms,
-                                    dataset=x) for x in ['train', 'val']}
+                                    dataset='val')
 
     # wrap your data and label into Tensor
-    dataloaders_dict = {x: torch.utils.data.DataLoader(image_datasets[x],
+    dataloaders_dict = torch.utils.data.DataLoader(image_datasets,
                                                  batch_size=batch_size,
-                                                 shuffle = True if x == 'train' else False,
+                                                 shuffle=False,
                                                  # num_workers=1
-                                                       ) for x in ['train', 'val']}
+                                                       )
 
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -546,25 +512,11 @@ if __name__ == '__main__':
     # Setup the loss fxn
     criterion = nn.MSELoss()
 
-    # Train and evaluate
-    model_ft, train_hist, val_hist, result = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))
-
-    plt.figure()
-    plt.title("Train and val Loss history vs. Number of Training Epochs")
-    plt.xlabel("Training Epochs")
-    plt.ylabel("Validation Accuracy")
-    plt.plot(range(1, num_epochs + 1), train_hist, label="train_hist")
-    plt.plot(range(1,num_epochs+1), val_hist, label="val_hist")
-    # plt.ylim((0, 2.))
-    # plt.xticks(np.arange(1, num_epochs+1, 1.0))
-    plt.legend()
-    plt.savefig(os.path.join(out_path, 'Hist of ' + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + '.png'))
-    plt.show()
-    hist = np.vstack((train_hist, val_hist))
-    np.savetxt(os.path.join(out_path, "Hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), hist.T)
+    # Evaluate
+    model_ft, train_hist, val_hist, result = eval_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=1, is_inception=(model_name=="inception"))
 
     #######################################################################
-    # -----------------------Evaluation--------------------------------
+    # -----------------------plot and save result-------------------------
     test_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
     _, meanVal, stdVal = Normalize(test_lab)
     result = InvNormalize(result, meanVal, stdVal)
@@ -594,18 +546,18 @@ if __name__ == '__main__':
     #     result.append(out_v)
     ############
     plt.figure()
-    plt.title(model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
+    plt.title(model_name + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
     plt.show()
     res = np.vstack((test_lab, result))
-    np.savetxt(os.path.join(out_path, 'Results of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), res.T, fmt='%s')
+    np.savetxt(os.path.join(out_path, 'Eval results of ' + fn + "_" + model_name + "_" + str(batch_size)), res.T, fmt='%s')
     ############
     result = np.array(result)
     test_lab = np.array(test_lab)
-    print('[Layered error]')
+    print('[Eval layered error]')
     error = (result - test_lab)/test_lab
     print('Mean(error): {:.2%}.'.format(np.mean(error)))
     print('Max(error): {:.2%}.'.format(np.max(error)))
@@ -616,13 +568,13 @@ if __name__ == '__main__':
     R2_s = r2_score(test_lab, result)
     print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
     ############
-    print('[Total models error]')
+    print('[Eval total models error]')
     E1 = np.sum(test_lab)
     E2 = np.sum(result)
     Er = (E1 - E2)/E2
     print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), E1, E2, Er, Rs, Mae, R2_s]
-    np.savetxt(os.path.join(out_path, 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)),
+    np.savetxt(os.path.join(out_path, 'Eval error of ' + fn + "_" + model_name + "_" + str(lr) + "_" + str(batch_size)),
                np.array(res_error), fmt='%s')
 
 
