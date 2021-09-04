@@ -4,8 +4,6 @@ Copyright 2021 Wang Kang
 
 from __future__ import print_function
 from __future__ import division
-
-import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -51,13 +49,13 @@ parser.add_argument('--data_dir', metavar='DIR', default='../ECC',
 '''
 Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
-alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
+alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16]
 '''
-parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
+parser.add_argument('--model', default='conformer', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-ep', '--epochs', type=int, default=2, metavar='N',
+parser.add_argument('-ep', '--epochs', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('-ft', '--use-pretrained', type=bool, default=True, metavar='N',
                     help='Flag to use fine tuneing(default: False)')
@@ -103,11 +101,11 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
 
             running_loss = 0.0
             running_corrects = 0
-            # Iterate over data 1.
-            for inputs, labels, paras in dataloaders[phase]:
+
+            # Iterate over data.
+            for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-                paras = paras.to(device)
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -121,9 +119,9 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                         outputs = outputs.view(-1)
                         loss1 = criterion(outputs, labels)
                         loss2 = criterion(aux_outputs, labels)
-                        loss = loss1 + 0.4 * loss2
+                        loss = loss1 + 0.4*loss2
                     else:
-                        outputs = model(inputs, paras)
+                        outputs = model(inputs)
                         if isinstance(outputs, list):
                             # Conformer or ...
                             for i, o in enumerate(outputs):
@@ -134,16 +132,15 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                             outputs = outputs.view(-1)
                             loss = criterion(outputs, labels)
 
-                        # output predicted results
-                        if phase == 'val' and epoch == num_epochs - 1:
+                        if phase == 'val' and epoch == num_epochs-1:
                             # result.append(outputs)
                             if isinstance(outputs, list):
                                 # Conformer or ...
 
                                 res = outputs[0]
-                                for i in range(1, len(outputs)):
-                                    res = res + outputs[i]
-                                res = res / len(outputs)
+                                for o in range(1, len(outputs)):
+                                    res = res + o
+                                res = res/len(outputs)
 
                                 temp = res.detach().cpu().numpy()
                                 for i in range(temp.shape[0]):
@@ -368,25 +365,6 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
             param.requires_grad = True  # it was require_grad
         input_size = 224
 
-
-    elif model_name == "ecpnet":
-        model_ft = create_model(
-            "EcpNet_tiny_patch16",
-            pretrained=False,
-            num_classes=1,
-            drop_rate=args.drop,
-            drop_path_rate=args.drop_path,
-            drop_block_rate=args.drop_block,
-        )
-        set_parameter_requires_grad(model_ft, feature_extract)
-        for param in model_ft.conv_cls_head.parameters():
-            param.requires_grad = True  # it was require_grad
-        for param in model_ft.trans_cls_head.parameters():
-            param.requires_grad = True  # it was require_grad
-        for param in model_ft.mlp_cls_head.parameters():
-            param.requires_grad = True  # it was require_grad
-        input_size = 224
-
     else:
         print("Invalid model name, exiting...")
         exit()
@@ -410,26 +388,22 @@ class customData(Dataset):
             lines = input_file.readlines()
             self.img_name = []
             self.img_label = []
-            self.params = []
             for line in lines:
-                ls = line.strip().split('\t')
-                img_name = ls[0]
+                img_name = line.strip().split('\t')[0]
                 img_prefix = img_name.split('-')[0]
                 # if img_prefix is not None:
                 if img_prefix in prefixs:
-                    self.img_name.append(os.path.join(img_path, img_name))
-                    self.img_label.append(float(ls[1]))
-                    self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
+                    self.img_name.append(os.path.join(img_path,img_name))
+                    self.img_label.append(float(line.strip().split('\t')[1]))
+        ln = len(self.img_label)
         y = self.img_label
-        y,_,_ = Normalize(y)
-        print('[' + dataset+ ']')
-        print('img_label shape: {}'.format(np.shape(y)))
-
-        z = self.params
-        z,_,_ = Normalize(z)
-        print('params shape: {}'.format(np.shape(z)))
+        y = torch.tensor(y)
+        y = y.numpy()
+        print(np.shape(y))
+        meanVal = np.mean(y)
+        stdVal = np.std(y)
+        y = (y - meanVal) / stdVal
         self.img_label = y
-        self.params = z
         self.data_transforms = data_transforms
         self.dataset = dataset
         self.loader = loader
@@ -441,13 +415,13 @@ class customData(Dataset):
         img_name = self.img_name[item]
         label = self.img_label[item]
         img = self.loader(img_name)
-        p = self.params[item]
+
         if self.data_transforms is not None:
             try:
                 img = self.data_transforms[self.dataset](img)
             except:
                 print("Cannot transform image: {}".format(img_name))
-        return img, label, p
+        return img, label
 
 
 def loadCol(infile, k):
@@ -472,36 +446,20 @@ def loadColStr(infile, k):
         temp2 = temp1.split('\t')
         if temp2[0].split('-')[0] in prefixs:
             dataset.append(float(temp2[k]))
+    # for i in range(0, len(dataset)):
+    #     for j in range(k):
+    #         #dataset[i].append(float(dataset[i][j]))
+    #         dataset[i][j] = float(dataset[i][j])
     return dataset
 
 
 def Normalize(data):
     # res = []
-    data = torch.tensor(data)
-    data= data.numpy()
-    res = data
-    # [1] mean-std norm
-    # if len(np.shape(data)) == 1:
-    #     aVal = np.mean(data)
-    #     bVal = np.std(data)
-    #     res = (data-aVal)/bVal
-    # else:
-    #     for i in [2,3]:
-    #         aVal = np.mean(data[:,i])
-    #         bVal = np.std(data[:,i])
-    #         res[:, i] = (data[:, i]-aVal)/bVal
-    # [2] 0-1 norm
-    if len(np.shape(data)) == 1:
-        aVal = np.min(data)
-        bVal = np.max(data)
-        res = (data-aVal)/(bVal-aVal)
-    else:
-        for i in [2,3]:
-            aVal = np.min(data[:,i])
-            bVal = np.max(data[:,i])
-            res[:, i] = (data[:, i]-aVal)/(bVal-aVal)
-    bVal = bVal-aVal
-    return res, aVal, bVal
+    data = np.array(data)
+    meanVal = np.mean(data)
+    stdVal = np.std(data)
+    res = (data - meanVal) / stdVal
+    return res, meanVal, stdVal
 
 
 def InvNormalize(data, meanVal, stdVal):
@@ -671,5 +629,4 @@ if __name__ == '__main__':
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
     np.savetxt(os.path.join(out_path, 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)),
                np.array(res_error), fmt='%s')
-
 
