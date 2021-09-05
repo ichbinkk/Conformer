@@ -342,6 +342,7 @@ class EcpNet(nn.Module):
         # 2~4 stage
         init_stage = 2
         fin_stage = depth // 3 + 1
+        # fin_stage = 3
         for i in range(init_stage, fin_stage):
             self.add_module('conv_trans_' + str(i),
                     ConvTransBlock(
