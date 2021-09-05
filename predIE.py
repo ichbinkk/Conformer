@@ -5,7 +5,6 @@ Copyright 2021 Wang Kang
 from __future__ import print_function
 from __future__ import division
 
-import numpy
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,7 +25,8 @@ import argparse
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
-from fvcore.nn import FlopCountAnalysis, parameter_count_table
+from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
+from torchstat import stat
 
 # For Conformer
 from timm.models import create_model
@@ -124,7 +124,10 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                         loss2 = criterion(aux_outputs, labels)
                         loss = loss1 + 0.4 * loss2
                     else:
-                        outputs = model(inputs, paras)
+                        if args.model == 'ecpnet':
+                            outputs = model(inputs, paras)
+                        else:
+                            outputs = model(inputs)
                         if isinstance(outputs, list):
                             # Conformer or ...
                             for i, o in enumerate(outputs):
@@ -140,7 +143,6 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                             # result.append(outputs)
                             if isinstance(outputs, list):
                                 # Conformer or ...
-
                                 res = outputs[0]
                                 for i in range(1, len(outputs)):
                                     res = res + outputs[i]
@@ -179,9 +181,14 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
 
     # load best model weights
     model.load_state_dict(best_model_wts)
+
     # save best model weights
-    save_path = os.path.join(out_path, args.model + '_' + str(best_epoch) + '_' + 'best_model.pth')
+    # output make dir
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+    save_path = os.path.join(out_path, args.model + '_' + str(best_epoch) + ' in ' + str(num_epochs) + '_' + 'best_model.pth')
     torch.save(best_model_wts, save_path)
+
     return model, train_acc_history, val_acc_history, result
 
 
@@ -523,12 +530,24 @@ if __name__ == '__main__':
     num_epochs = args.epochs
     use_pretrained = args.use_pretrained
     feature_extract = args.feature_extract
+    out_path = out_path + '_' + args.model
 
     # get data Dir name
     fn = infile.split('/')[-1]
 
     # Initialize the model for this run
     model_ft, input_size = initialize_model(model_name, num_classes, feature_extract, use_pretrained)
+
+    # Analyze flops and params
+    print(parameter_count_table(model_ft))
+    if args.model == 'ecpnet':
+        input = (torch.rand(1, 3, 224, 224), torch.rand(1, 1, 4))
+    else:
+        input = (torch.rand(1, 3, 224, 224),)
+    flops = FlopCountAnalysis(model_ft, input)
+    print("FLOPs: ", flops.total())
+    print('-'*30)
+    # stat(model_ft, (3, 224, 224))
 
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -568,12 +587,6 @@ if __name__ == '__main__':
     # Send the model to GPU
     model_ft = model_ft.to(device)
 
-    # Analyze flops and params
-    # tensor = (torch.rand(1, 3, 224, 224), torch.rand(1, 4))
-    # flops = FlopCountAnalysis(model_ft, tensor)
-    # print("FLOPs: ", flops.total())
-    print(parameter_count_table(model_ft))
-
     # show the training parameters
     params_to_update = model_ft.parameters()
     print("Params to learn:")
@@ -598,10 +611,6 @@ if __name__ == '__main__':
 
     # Train and evaluate
     model_ft, train_hist, val_hist, result = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))
-    # output make dir
-    out_path = out_path + '_' + model_name
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
 
     plt.figure()
     plt.title("Train and val Loss history vs. Number of Training Epochs")
