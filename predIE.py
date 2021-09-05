@@ -26,6 +26,7 @@ import argparse
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
+from fvcore.nn import FlopCountAnalysis, parameter_count_table
 
 # For Conformer
 from timm.models import create_model
@@ -57,11 +58,11 @@ parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-ep', '--epochs', type=int, default=2, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=2, metavar='N',
                     help='number of epochs to train (default: )')
-parser.add_argument('-ft', '--use-pretrained', type=bool, default=True, metavar='N',
+parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
-parser.add_argument('-fe', '--feature-extract', type=bool, default=True, metavar='N',
+parser.add_argument('--feature-extract', action='store_true', default=False,
                     help='False to finetune the whole model. True to update the reshaped layer params(default: False)')
 
 parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
@@ -355,7 +356,7 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
     elif model_name == "conformer":
         model_ft = create_model(
             "Conformer_tiny_patch16",
-            pretrained=False,
+            pretrained=use_pretrained,
             num_classes=1,
             drop_rate=args.drop,
             drop_path_rate=args.drop_path,
@@ -372,7 +373,7 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
     elif model_name == "ecpnet":
         model_ft = create_model(
             "EcpNet_tiny_patch16",
-            pretrained=False,
+            pretrained=use_pretrained,
             num_classes=1,
             drop_rate=args.drop,
             drop_path_rate=args.drop_path,
@@ -522,17 +523,12 @@ if __name__ == '__main__':
     num_epochs = args.epochs
     use_pretrained = args.use_pretrained
     feature_extract = args.feature_extract
-    # output make dir
-    out_path = out_path + '_' + model_name
-    if not os.path.exists(out_path):
-        os.makedirs(out_path)
+
     # get data Dir name
     fn = infile.split('/')[-1]
 
     # Initialize the model for this run
     model_ft, input_size = initialize_model(model_name, num_classes, feature_extract, use_pretrained)
-
-
 
     # Data augmentation and normalization for training
     # Just normalization for validation
@@ -572,6 +568,13 @@ if __name__ == '__main__':
     # Send the model to GPU
     model_ft = model_ft.to(device)
 
+    # Analyze flops and params
+    # tensor = (torch.rand(1, 3, 224, 224), torch.rand(1, 4))
+    # flops = FlopCountAnalysis(model_ft, tensor)
+    # print("FLOPs: ", flops.total())
+    print(parameter_count_table(model_ft))
+
+    # show the training parameters
     params_to_update = model_ft.parameters()
     print("Params to learn:")
     if feature_extract:
@@ -595,6 +598,10 @@ if __name__ == '__main__':
 
     # Train and evaluate
     model_ft, train_hist, val_hist, result = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))
+    # output make dir
+    out_path = out_path + '_' + model_name
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
 
     plt.figure()
     plt.title("Train and val Loss history vs. Number of Training Epochs")
