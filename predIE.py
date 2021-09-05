@@ -26,14 +26,16 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
 from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
-from torchstat import stat
+# from torchstat import stat
 
 # For Conformer
 from timm.models import create_model
 import models
 
 # output path
-out_path = os.path.join('./output', time.strftime("%Y%m%d-%H%M%S", time.localtime()))
+t = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+out_path = os.path.join('./output', t)
+test_path = os.path.join('./test', t)
 
 
 # Number of classes in the dataset
@@ -49,6 +51,8 @@ parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 # Dataset / Model parameters
 parser.add_argument('--data_dir', metavar='DIR', default='../ECC',
                     help='path to dataset')
+parser.add_argument('--phase', default='test', type=str, metavar='NAME',
+                    help='Phase of eval dataset (default: )')
 '''
 Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
@@ -58,7 +62,7 @@ parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=30, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=2, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -74,7 +78,7 @@ parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
 
 # set train and val data prefixs
 # prefixs = ['A1','A2','B1','B2','C1','C2','D1','D2','E1','E2']
-prefixs = ['A1','A2','B1','B2','C1','C2', 'D2']
+prefixs = ['A1','A2','B1','B2','C1','C2', 'D2', 'E1']
 # prefixs = ['A1','B1','C2', 'D2', 'E1']
 
 
@@ -534,6 +538,7 @@ if __name__ == '__main__':
     use_pretrained = args.use_pretrained
     feature_extract = args.feature_extract
     out_path = out_path + '_' + args.model
+    test_path = test_path + '_' + args.model
 
     # get data Dir name
     fn = infile.split('/')[-1]
@@ -557,7 +562,7 @@ if __name__ == '__main__':
     data_transforms = {
         'train': transforms.Compose([
             # transforms.RandomResizedCrop(input_size),
-            # transforms.RandomHorizontalFlip(),
+            transforms.RandomHorizontalFlip(),
             # transforms.Resize(input_size),
             # transforms.CenterCrop(input_size),
             transforms.Resize([input_size, input_size]),
@@ -565,6 +570,11 @@ if __name__ == '__main__':
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),
         'val': transforms.Compose([
+            transforms.Resize([input_size, input_size]),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        'test': transforms.Compose([
             transforms.Resize([input_size, input_size]),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -629,50 +639,128 @@ if __name__ == '__main__':
     hist = np.vstack((train_hist, val_hist))
     np.savetxt(os.path.join(out_path, "Hist of " + fn + "_" + str(model_name) + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), hist.T)
 
-    #######################################################################
-    # -----------------------Evaluation--------------------------------
-    test_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
-    _, meanVal, stdVal = Normalize(test_lab)
-    result = InvNormalize(result, meanVal, stdVal)
+    #########################################################################
+    # -----------------------Last Val result--------------------------------#
+    val_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
+    _, aVal, bVal = Normalize(val_lab)
+    result = InvNormalize(result, aVal, bVal)
 
-    ### test ###
-    # test_img_path = loadCol(os.path.join(infile, 'test.txt'), 0)
-    # test_lab = loadCol(os.path.join(infile, 'test.txt'), 1)
-    # _, meanVal, stdVal = Normalize(test_lab)
-    #
-    # model_ft.eval()
-    # torch.no_grad()
-    # result = []
-    # transform = transforms.Compose([
-    #     transforms.Resize(input_size),
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-    #                          std=[0.229, 0.224, 0.225])
-    # ])
-    # for i in range(len(test_img_path)):
-    #     test_img = Image.open(os.path.join(infile, test_img_path[i])).convert('RGB')
-    #     test_img = transform(test_img).unsqueeze(0)
-    #     test_img = test_img.to(device)
-    #     out = model_ft(test_img)
-    #     out = out.detach().cpu().numpy()
-    #     out_v = out[0][0] * stdVal + meanVal
-    #     # print(out_v)
-    #     result.append(out_v)
-    ############
     plt.figure()
     plt.title(model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Validation Result")
+    ts = range(len(val_lab))
+    plt.plot(ts, val_lab, label="val_lab")
+    plt.plot(ts, result, label="pred_lab")
+    plt.legend()
+    plt.show()
+    res = np.vstack((val_lab, result))
+    np.savetxt(os.path.join(out_path, 'Results of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), res.T, fmt='%s')
+    ############
+    result = np.array(result)
+    val_lab = np.array(val_lab)
+    print('[Layered error]')
+    error = (result - val_lab)/val_lab
+    print('Mean(error): {:.2%}.'.format(np.mean(error)))
+    print('Max(error): {:.2%}.'.format(np.max(error)))
+    print('Min(error): {:.2%}.'.format(np.min(error)))
+    print('Std(error): {:.2f}.'.format(np.std(error)))
+    Rs = mean_squared_error(val_lab, result) ** 0.5
+    Mae = mean_absolute_error(val_lab, result)
+    R2_s = r2_score(val_lab, result)
+    print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
+    ############
+    print('[Total models error]')
+    E1 = np.sum(val_lab)
+    E2 = np.sum(result)
+    Er = (E1 - E2)/E2
+    print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
+    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
+    np.savetxt(os.path.join(out_path, 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)),
+               np.array(res_error), fmt='%s')
+
+    ##########################################################################
+    # -----------------------Best test result--------------------------------#
+    print("-"*30)
+    image_datasets = customData(img_path=infile,
+                                txt_path=os.path.join(infile, args.phase + '.txt'),
+                                data_transforms=data_transforms,
+                                dataset=args.phase)
+
+    # wrap your data and label into Tensor
+    dataloaders_dict = torch.utils.data.DataLoader(image_datasets,
+                                                   batch_size=batch_size,
+                                                   shuffle=False,
+                                                   )
+    since = time.time()
+    train_acc_history = []
+    val_acc_history = []
+    result = []
+    # best_model_wts = copy.deepcopy(model.state_dict())
+    min_loss = 999999
+
+    # For one epoch
+    for epoch in range(1):
+        print('-' * 10)
+        model_ft.eval()  # Set model to evaluate mode
+        # For one batch.
+        for inputs, labels, paras in dataloaders_dict:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            paras = paras.to(device)
+            # forward
+            if args.model == 'ecpnet':
+                outputs = model_ft(inputs, paras)
+            else:
+                outputs = model_ft(inputs)
+            if isinstance(outputs, list):
+                # Conformer or ...
+                for i, o in enumerate(outputs):
+                    outputs[i] = o.view(-1)
+                loss_list = [criterion(o, labels) / len(outputs) for o in outputs]
+                loss = sum(loss_list)
+            else:
+                outputs = outputs.view(-1)
+                loss = criterion(outputs, labels)
+
+            # output predicted results
+            if isinstance(outputs, list):
+                # Conformer or ...
+                res = outputs[0]
+                for i in range(1, len(outputs)):
+                    res = res + outputs[i]
+                res = res / len(outputs)
+
+                temp = res.detach().cpu().numpy()
+                for i in range(temp.shape[0]):
+                    result.append(temp[i])
+            else:
+                temp = outputs.detach().cpu().numpy()
+                for i in range(temp.shape[0]):
+                    result.append(temp[i])
+    time_elapsed = time.time() - since
+    print('Test complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+    # -----------------------Test result--------------------------------#
+    test_lab = loadColStr(os.path.join(infile, 'test.txt'), 1)
+    _, aVal, bVal = Normalize(test_lab)
+    result = InvNormalize(result, aVal, bVal)
+    # output make dir
+    if not os.path.exists(test_path):
+        os.makedirs(test_path)
+    ####################################
+    plt.figure()
+    plt.title(model_name + "_" + str(lr) + "_" + str(batch_size) + "Test Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
+    plt.savefig(os.path.join(test_path, 'Best test result of ' + fn + "_" + model_name + '.png'))
     plt.show()
     res = np.vstack((test_lab, result))
-    np.savetxt(os.path.join(out_path, 'Results of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)), res.T, fmt='%s')
-    ############
+    np.savetxt(os.path.join(test_path, 'Best test result of ' + fn + "_" + model_name), res.T, fmt='%s')
+    ####################################
     result = np.array(result)
     test_lab = np.array(test_lab)
-    print('[Layered error]')
-    error = (result - test_lab)/test_lab
+    print('[Test layered error]')
+    error = (result - test_lab) / test_lab
     print('Mean(error): {:.2%}.'.format(np.mean(error)))
     print('Max(error): {:.2%}.'.format(np.max(error)))
     print('Min(error): {:.2%}.'.format(np.min(error)))
@@ -681,14 +769,11 @@ if __name__ == '__main__':
     Mae = mean_absolute_error(test_lab, result)
     R2_s = r2_score(test_lab, result)
     print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
-    ############
-    print('[Total models error]')
+    print('[Test total models error]')
     E1 = np.sum(test_lab)
     E2 = np.sum(result)
-    Er = (E1 - E2)/E2
-    print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1,E2,Er))
+    Er = (E1 - E2) / E2
+    print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
-    np.savetxt(os.path.join(out_path, 'Error of ' + fn + "_" + model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size)),
+    np.savetxt(os.path.join(test_path, 'Test error of ' + fn + "_" + model_name),
                np.array(res_error), fmt='%s')
-
-
