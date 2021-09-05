@@ -361,8 +361,11 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
         input_size = 299
 
     elif model_name == "conformer":
+        """
+        Conformer_tiny_patch16, Conformer_small_patch16, Conformer_small_patch32, Conformer_base_patch16
+        """
         model_ft = create_model(
-            "Conformer_tiny_patch16",
+            "Conformer_base_patch16",
             pretrained=use_pretrained,
             num_classes=1,
             drop_rate=args.drop,
