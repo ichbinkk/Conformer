@@ -28,7 +28,6 @@ from sklearn.metrics import r2_score
 from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
 # from torchstat import stat
 
-# For Conformer
 from timm.models import create_model
 import models
 
@@ -62,11 +61,11 @@ parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=2, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=20, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
-parser.add_argument('--feature-extract', action='store_true', default=False,
+parser.add_argument('--feature-extract', action='store_true', default=True,
                     help='False to finetune the whole model. True to update the reshaped layer params(default: False)')
 
 parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
@@ -128,7 +127,7 @@ def train_model(model, dataloaders, criterion, optimizer, num_epochs=25, is_ince
                         loss2 = criterion(aux_outputs, labels)
                         loss = loss1 + 0.4 * loss2
                     else:
-                        if args.model == 'ecpnet':
+                        if args.model == 'ecpnet' or 'ecpnetno':
                             outputs = model(inputs, paras)
                         else:
                             outputs = model(inputs)
@@ -402,6 +401,23 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
             param.requires_grad = True  # it was require_grad
         input_size = 224
 
+    elif model_name == "ecpnetno":
+        model_ft = create_model(
+            "EcpNet_NoConnect",
+            pretrained=use_pretrained,
+            num_classes=1,
+            drop_rate=args.drop,
+            drop_path_rate=args.drop_path,
+            drop_block_rate=args.drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
     else:
         print("Invalid model name, exiting...")
         exit()
@@ -496,26 +512,35 @@ def Normalize(data):
     data= data.numpy()
     res = data
     # [1] mean-std norm
-    # if len(np.shape(data)) == 1:
-    #     aVal = np.mean(data)
-    #     bVal = np.std(data)
-    #     res = (data-aVal)/bVal
-    # else:
-    #     for i in [2,3]:
-    #         aVal = np.mean(data[:,i])
-    #         bVal = np.std(data[:,i])
-    #         res[:, i] = (data[:, i]-aVal)/bVal
-    # [2] 0-1 norm
     if len(np.shape(data)) == 1:
-        aVal = np.min(data)
-        bVal = np.max(data)
-        res = (data-aVal)/(bVal-aVal)
+        aVal = np.mean(data)
+        bVal = np.std(data)
+        res = (data-aVal)/bVal
     else:
         for i in [2,3]:
-            aVal = np.min(data[:,i])
-            bVal = np.max(data[:,i])
-            res[:, i] = (data[:, i]-aVal)/(bVal-aVal)
-    bVal = bVal-aVal
+            aVal = np.mean(data[:,i])
+            bVal = np.std(data[:,i])
+            res[:, i] = (data[:, i]-aVal)/bVal
+    # [2] 0-1 norm
+    # if len(np.shape(data)) == 1:
+    #     aVal = np.min(data)
+    #     bVal = np.max(data)
+    #     res = (data-aVal)/(bVal-aVal)
+    # else:
+    #     for i in [2,3]:
+    #         aVal = np.min(data[:,i])
+    #         bVal = np.max(data[:,i])
+    #         res[:, i] = (data[:, i]-aVal)/(bVal-aVal)
+    # bVal = bVal-aVal
+    # [3] max norm
+    # if len(np.shape(data)) == 1:
+    #     bVal = np.max(data)
+    #     res = data / bVal
+    # else:
+    #     for i in [2, 3]:
+    #         bVal = np.max(data[:, i])
+    #         res[:, i] = data[:, i] / bVal
+    # aVal = 0
     return res, aVal, bVal
 
 
@@ -548,7 +573,7 @@ if __name__ == '__main__':
 
     # Analyze flops and params
     print(parameter_count_table(model_ft))
-    if args.model == 'ecpnet':
+    if args.model == 'ecpnet' or 'ecpnetno':
         input = (torch.rand(1, 3, 224, 224), torch.rand(1, 1, 4))
     else:
         input = (torch.rand(1, 3, 224, 224),)
@@ -707,7 +732,7 @@ if __name__ == '__main__':
             labels = labels.to(device)
             paras = paras.to(device)
             # forward
-            if args.model == 'ecpnet':
+            if args.model == 'ecpnet' or 'ecpnetno':
                 outputs = model_ft(inputs, paras)
             else:
                 outputs = model_ft(inputs)
