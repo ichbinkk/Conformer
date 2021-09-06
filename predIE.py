@@ -59,11 +59,11 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
+parser.add_argument('--model', default='swin-vit', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
-parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
+parser.add_argument('-b', '--batch-size', type=int, default=2, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=20, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=1, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -181,7 +181,7 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 E1 = np.sum(GT)
                 E2 = np.sum(result)
                 Er = (E1 - E2) / E2
-                print('GT: {:.2f}J, prediction: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
+                print('GT: {:.2f}J, ECP: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
                 RE_history.append(Er)
                 # get best model
                 if epoch_loss < min_loss:
