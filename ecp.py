@@ -189,7 +189,6 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
     model_ft.eval()  # Set model to evaluate mode
     # For one epoch
     for epoch in range(1):
-        print('-' * 10)
         # For one batch.
         for inputs, labels, paras in dataloaders_dict:
             inputs = inputs.to(device)
@@ -217,6 +216,7 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
                 for i in range(temp.shape[0]):
                     result.append(temp[i])
     time_elapsed = time.time() - since
+    print()
     print('Test complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     # -----------------------Test result--------------------------------#
     test_lab = loadColStr(os.path.join(infile, phase + '.txt'), 1)
