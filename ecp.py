@@ -196,8 +196,8 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
             paras = paras.to(device)
             # forward
             if 'ecpnet' in model_name:
-                # outputs = model_ft(inputs, paras)
-                outputs = model_ft(paras)
+                outputs = model_ft(inputs, paras)
+                # outputs = model_ft(paras)
             else:
                 outputs = model_ft(inputs)
 
