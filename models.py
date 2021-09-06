@@ -96,7 +96,7 @@ def Conformer_base_patch16(pretrained=False, **kwargs):
 
 @register_model
 def EcpNet_tiny_patch16(pretrained=False, **kwargs):
-    model = EcpNet(patch_size=16, channel_ratio=1, embed_dim=384, depth=9,
+    model = EcpNet(patch_size=16, channel_ratio=1, embed_dim=384, depth=12,
                       num_heads=6, mlp_ratio=4, qkv_bias=True, **kwargs)
     if pretrained:
         raise NotImplementedError
@@ -104,8 +104,16 @@ def EcpNet_tiny_patch16(pretrained=False, **kwargs):
 
 @register_model
 def EcpNet_NoConnect(pretrained=False, **kwargs):
-    model = EcpNetNoConnect(patch_size=16, channel_ratio=1, embed_dim=384, depth=6,
+    model = EcpNetNoConnect(patch_size=16, channel_ratio=1, embed_dim=384, depth=12,
                       num_heads=6, mlp_ratio=4, qkv_bias=True, **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
+
+@register_model
+def EcpNet_LCIvec(pretrained=False, **kwargs):
+    model = EcpNet(patch_size=16, channel_ratio=1, embed_dim=384, depth=12,
+                      num_heads=6, mlp_ratio=4, qkv_bias=True, D_in=2, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
