@@ -59,15 +59,15 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnetlv', type=str, metavar='MODEL',
+parser.add_argument('--model', default='ecpnetv', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=16, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=2, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=20, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
-parser.add_argument('--feature-extract', action='store_true', default=True,
+parser.add_argument('--feature-extract', action='store_true', default=False,
                     help='False to finetune the whole model. True to update the reshaped layer params(default: False)')
 
 parser.add_argument('--drop', type=float, default=0.0, metavar='PCT',
@@ -125,7 +125,8 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                         loss = loss1 + 0.4 * loss2
                     else:
                         if 'ecpnet' in args.model:
-                            outputs = model(inputs, paras)
+                            # outputs = model(inputs, paras)
+                            outputs = model(paras)
                         else:
                             outputs = model(inputs)
                         if isinstance(outputs, list):
@@ -176,11 +177,11 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 Rs = mean_squared_error(GT, result) ** 0.5
                 Mae = mean_absolute_error(GT, result)
                 R2_s = r2_score(GT, result)
-                print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
+                print('RMSE: {:.2f}J, MAE: {:.2f}, R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
                 E1 = np.sum(GT)
                 E2 = np.sum(result)
                 Er = (E1 - E2) / E2
-                print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
+                print('GT: {:.2f}J, prediction: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
                 RE_history.append(Er)
                 # get best model
                 if epoch_loss < min_loss:
@@ -450,6 +451,18 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Fa
             param.requires_grad = True  # it was require_grad
         input_size = 224
 
+
+    elif model_name == "ecpnetv":
+        model_ft = create_model(
+            "EcpNet_Vec",
+            pretrained=use_pretrained,
+            num_classes=1,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
     else:
         print("Invalid model name, exiting...")
         exit()
@@ -559,6 +572,10 @@ if __name__ == '__main__':
     # load Val Ground Truth dataset to compare in every Val epoch
     val_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
     _, aVal, bVal = Normalize(val_lab)
+    # train_lab = loadColStr(os.path.join(infile, 'train.txt'), 1)
+    # _, aVal, bVal = Normalize(train_lab)
+
+
 
     # Train and evaluate
     model_ft, train_hist, val_hist, result, RE_history = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, val_lab, aVal, bVal, num_epochs=num_epochs, is_inception=(model_name=="inception"))
@@ -581,7 +598,7 @@ if __name__ == '__main__':
     # plot RE result of all epochs
     plt.figure()
     plt.title(model_name + "_" + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size) + "Error Ratio (RE) Result")
-    plt.plot(range(1, num_epochs + 1), RE_history, label="RE_history")
+    plt.plot(range(1, num_epochs + 1), np.abs(RE_history), label="RE_history")
     plt.legend()
     plt.show()
     #########################################################################

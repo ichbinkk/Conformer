@@ -453,3 +453,57 @@ class EcpNetNoConnect(nn.Module):
         mlp_cls = self.mlp_cls_head(x_m)
 
         return [conv_cls, tran_cls, mlp_cls]
+
+
+class EcpNetVec(nn.Module):
+
+    def __init__(self, num_classes=1000, depth=12,  mlp_ratio=4., D_in=4):
+
+        # Transformer
+        super().__init__()
+        self.num_classes = num_classes
+        self.depth = 12
+        assert depth % 3 == 0
+
+
+        # MLP blocks for processing-level data
+        for i in range(depth):
+            self.add_module('mlp_' + str(i),
+                            Mlp(D_in)
+                            )
+        self.fc1 = nn.Linear(D_in, D_in * mlp_ratio)
+        self.mlp_cls_head = nn.Linear(D_in * mlp_ratio, num_classes)
+
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight, 1.)
+            nn.init.constant_(m.bias, 0.)
+        elif isinstance(m, nn.GroupNorm):
+            nn.init.constant_(m.weight, 1.)
+            nn.init.constant_(m.bias, 0.)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'cls_token'}
+
+    def forward(self, x_m):
+        for i in range(2, self.depth):
+            x_m = eval('self.mlp_' + str(i))(x_m)
+
+        # mlp classification
+        x_m = self.fc1(x_m)
+        x_m = F.relu(x_m)
+        mlp_cls = self.mlp_cls_head(x_m)
+
+        return mlp_cls

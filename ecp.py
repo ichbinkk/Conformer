@@ -52,8 +52,8 @@ class customData(Dataset):
                 if img_prefix in prefixs:
                     self.img_name.append(os.path.join(img_path, img_name))
                     self.img_label.append(float(ls[1]))
-                    # self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
-                    self.params.append([float(ls[2]), float(ls[3])])
+                    self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
+                    # self.params.append([float(ls[2]), float(ls[3])])
         y = self.img_label
         y,_,_ = Normalize(y)
         print('[' + dataset+ ']')
@@ -196,7 +196,8 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
             paras = paras.to(device)
             # forward
             if 'ecpnet' in model_name:
-                outputs = model_ft(inputs, paras)
+                # outputs = model_ft(inputs, paras)
+                outputs = model_ft(paras)
             else:
                 outputs = model_ft(inputs)
 

@@ -392,11 +392,13 @@ class EcpNet(nn.Module):
 
         trunc_normal_(self.cls_token, std=.02)
 
-        self.apply(self._init_weights)
-
         # MLP block for processing-level data
         self.fc1 = nn.Linear(D_in, D_in * mlp_ratio)
         self.mlp_cls_head = nn.Linear(D_in * mlp_ratio, num_classes)
+
+        self.apply(self._init_weights)
+
+
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

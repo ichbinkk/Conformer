@@ -8,7 +8,7 @@ from vision_transformer import VisionTransformer, _cfg
 from conformer import Conformer
 from timm.models.registry import register_model
 from ecpnet import EcpNet
-from ecpnets import EcpNetNoConnect
+from ecpnets import EcpNetNoConnect, EcpNetVec
 
 @register_model
 def deit_tiny_patch16_224(pretrained=False, **kwargs):
@@ -114,6 +114,13 @@ def EcpNet_NoConnect(pretrained=False, **kwargs):
 def EcpNet_LCIvec(pretrained=False, **kwargs):
     model = EcpNet(patch_size=16, channel_ratio=1, embed_dim=384, depth=12,
                       num_heads=6, mlp_ratio=4, qkv_bias=True, D_in=2, **kwargs)
+    if pretrained:
+        raise NotImplementedError
+    return model
+
+@register_model
+def EcpNet_Vec(pretrained=False, **kwargs):
+    model = EcpNetVec(depth=12, mlp_ratio=4, D_in=4, **kwargs)
     if pretrained:
         raise NotImplementedError
     return model
