@@ -20,11 +20,13 @@ from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
 
+import pandas as pd
 
 
 # set train and val data prefixs
+prefixs = None
 # prefixs = ['A1','A2','B1','B2','C1','C2','D1','D2','E1','E2']
-prefixs = ['A1','A2','B1','B2','C1','C2', 'D2', 'E1']
+# prefixs = ['A1','A2','B1','B2','C1','C2', 'D2', 'E1']
 # prefixs = ['A1','B1','C2', 'D2', 'E1']
 
 
@@ -47,13 +49,13 @@ class customData(Dataset):
             for line in lines:
                 ls = line.strip().split('\t')
                 img_name = ls[0]
-                img_prefix = img_name.split('-')[0]
-                # if img_prefix is not None:
-                if img_prefix in prefixs:
-                    self.img_name.append(os.path.join(img_path, img_name))
-                    self.img_label.append(float(ls[1]))
-                    self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
-                    # self.params.append([float(ls[2]), float(ls[3])])
+                # img_prefix = img_name.split('-')[0]
+                # if (img_prefix is not None) and (img_prefix not in prefixs):
+                #     continue
+                self.img_name.append(os.path.join(img_path, img_name))
+                self.img_label.append(float(ls[1]))
+                self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
+                # self.params.append([float(ls[2]), float(ls[3])])
         y = self.img_label
         y,_,_ = Normalize(y)
         print('[' + dataset+ ']')
@@ -91,8 +93,8 @@ def loadColStr(infile, k):
     for line in sourceInLine:
         temp1 = line.strip('\n')
         temp2 = temp1.split('\t')
-        if temp2[0].split('-')[0] in prefixs:
-            dataset.append(float(temp2[k]))
+        # if temp2[0].split('-')[0] in prefixs:
+        dataset.append(float(temp2[k]))
     return dataset
 
 
@@ -187,7 +189,10 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
     # Detect if we have a GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_ft.eval()  # Set model to evaluate mode
-    # For one epoch
+
+    '''
+        training each epoch
+    '''
     for epoch in range(1):
         # For one batch.
         for inputs, labels, paras in dataloaders_dict:
@@ -219,6 +224,7 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
     time_elapsed = time.time() - since
     print()
     print('Test complete in time of {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
+
     # -----------------------Test result--------------------------------#
     test_lab = loadColStr(os.path.join(infile, phase + '.txt'), 1)
     _, aVal, bVal = Normalize(test_lab)
@@ -227,37 +233,52 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
+
     ####################################
     plt.figure()
-    plt.title(model_name  + "_" + str(batch_size) + "Test Result")
+    plt.title(model_name + "_" + "Validation Result")
     ts = range(len(test_lab))
     plt.plot(ts, test_lab, label="test_lab")
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
-    plt.savefig(os.path.join(save_path, 'Best test result of ' + "_" + model_name + '.png'))
     plt.show()
     res = np.vstack((test_lab, result))
-    np.savetxt(os.path.join(save_path, 'Best test result of ' + "_" + model_name), res.T, fmt='%s')
-    ####################################
+    np.savetxt(os.path.join(save_path, 'Results' + "_" + str(batch_size)), res.T, fmt='%s')
+
+    '''layered error'''
     result = np.array(result)
     test_lab = np.array(test_lab)
-    print('[Test layered error]')
+    # writer.add_scalars('Validation/result', {'test_lab': test_lab, 'pred_lab': result}, ts)
+    print('[Layered error]')
     error = (result - test_lab) / test_lab
-    print('Mean(error): {:.2%}.'.format(np.mean(error)))
-    print('Max(error): {:.2%}.'.format(np.max(error)))
-    print('Min(error): {:.2%}.'.format(np.min(error)))
-    print('Std(error): {:.2f}.'.format(np.std(error)))
+    print('Mean(error): {:.2%} | Max(error): {:.2%} | Min(error): {:.2%} | Std(error): {:.2f}'.format(
+        np.mean(error), np.max(error), np.min(error), np.std(error)))
+
+    '''RMSE, Mae, R^2'''
+    print('[Statistic error]')
     Rs = mean_squared_error(test_lab, result) ** 0.5
     Mae = mean_absolute_error(test_lab, result)
     R2_s = r2_score(test_lab, result)
-    print('Root mean_squared_error: {:.2f}J, Mean_absolute_error: {:.2f}, R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
-    print('[Test total models error]')
+    print('Root mean_squared_error: {:.2f}J | Mean_absolute_error: {:.2f} | R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
+
+    '''total error'''
+    print('[Total error]')
     E1 = np.sum(test_lab)
     E2 = np.sum(result)
-    Er = (E1 - E2) / E2
-    print('Actual total EC: {:.2f}J, Predicted total EC: {:.2f}J, Er: {:.2%}'.format(E1, E2, Er))
-    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
-    np.savetxt(os.path.join(save_path, 'Test error of ' + "_" + model_name),
-               np.array(res_error), fmt='%s')
+    Er = np.abs((E1 - E2) / E2)
+    print('Actual EC: {:.2f}J | Predicted EC: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
+
+    '''save error to file'''
+    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), E1, E2, Er, Rs, Mae, R2_s]
+    np.savetxt(os.path.join(save_path, 'Error' + "_" + str(batch_size)), np.array(res_error), fmt='%s')
+
+
+def save_excel(data, file):
+    '''write to excel'''
+    writer = pd.ExcelWriter(file)  # 写入Excel文件
+    data = pd.DataFrame(data)
+    data.to_excel(writer, sheet_name='Sheet1', float_format='%.2f', header=False, index=False)
+    writer.save()
+    writer.close()
 
 

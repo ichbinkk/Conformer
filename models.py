@@ -94,6 +94,10 @@ def Conformer_base_patch16(pretrained=False, **kwargs):
         raise NotImplementedError
     return model
 
+
+'''
+    add by KK
+'''
 @register_model
 def EcpNet_tiny_patch16(pretrained=False, **kwargs):
     model = EcpNet(patch_size=16, channel_ratio=1, embed_dim=384, depth=12,
@@ -101,6 +105,7 @@ def EcpNet_tiny_patch16(pretrained=False, **kwargs):
     if pretrained:
         raise NotImplementedError
     return model
+
 
 @register_model
 def EcpNet_NoConnect(pretrained=False, **kwargs):
