@@ -273,8 +273,8 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
     np.savetxt(os.path.join(save_path, 'Error' + "_" + str(batch_size)), np.array(res_error), fmt='%s')
 
 
+'''write to excel'''
 def save_excel(data, file):
-    '''write to excel'''
     writer = pd.ExcelWriter(file)  # 写入Excel文件
     data = pd.DataFrame(data)
     data.to_excel(writer, sheet_name='Sheet1', float_format='%.2f', header=False, index=False)

@@ -29,7 +29,7 @@ import pandas as pd
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
-# from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
+
 # from torchstat import stat
 
 from timm.models import create_model
@@ -81,18 +81,24 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
 
     train_acc_history = []
     val_acc_history = []
+
     last_result = []
+    best_result = []
+
     RE_history = []
 
     best_model_wts = copy.deepcopy(model.state_dict())
+
     best_epoch = 0
     min_loss = 999999
+    min_metric = 999999
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch+1, num_epochs))
         print('-' * 10)
 
         result = []
+
         '''
             Each epoch has a training and validation phase
         '''
@@ -184,16 +190,25 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 print('RMSE: {:.2f}J | MAE: {:.2f} | R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
                 E1 = np.sum(GT)
                 E2 = np.sum(result)
-                Er = np.abs((E1 - E2) / E2)
+                Er = np.abs((E1 - E2) / E1)
                 print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
                 RE_history.append(Er)
 
                 # find best model
-                if epoch_loss < min_loss:
-                    min_loss = epoch_loss  # update min_loss
-                    print('Min loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch+1, num_epochs))
+                # if epoch_loss < min_loss:
+                #     min_loss = epoch_loss  # update min_loss
+                #     print('Min loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch+1, num_epochs))
+                #     best_model_wts = copy.deepcopy(model.state_dict())
+                #     best_epoch = epoch
+                #
+                #     # load best model weights, and return
+                #     model.load_state_dict(best_model_wts)
+                if Er < min_metric:
+                    min_metric = Er  # update min_loss
+                    print('Min Er: {:4f} in Epoch {}/{}'.format(Er, epoch+1, num_epochs))
                     best_model_wts = copy.deepcopy(model.state_dict())
                     best_epoch = epoch
+                    best_result = result
         print()
 
     # After training or val all epochs
@@ -204,13 +219,12 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
     model.load_state_dict(best_model_wts)
 
     # Save best model weights
-    # output make dir
     if not os.path.exists(out_path):
         os.makedirs(out_path)
     save_path = os.path.join(out_path, 'Best_checkpoint.pth')
     torch.save(best_model_wts, save_path)
 
-    return model, train_acc_history, val_acc_history, last_result, RE_history
+    return model, train_acc_history, val_acc_history, best_result, RE_history
 
 
 def set_parameter_requires_grad(model, feature_extracting):
@@ -477,7 +491,7 @@ def initialize_model(model_name, num_classes=1, feature_extract=False, use_pretr
 if __name__ == '__main__':
     print("PyTorch Version: ", torch.__version__)
     print("Torchvision Version: ", torchvision.__version__)
-    random_seed(666)
+    # random_seed(666)
 
     '''get all args params'''
     args = parser.parse_args()
@@ -499,14 +513,25 @@ if __name__ == '__main__':
     '''
         Analyze flops and params
     '''
-    # print(parameter_count_table(model_ft))
-    # if args.model == 'ecpnet' or 'ecpnetno':
-    #     input = (torch.rand(1, 3, 224, 224), torch.rand(1, 1, 4))
-    # else:
-    #     input = (torch.rand(1, 3, 224, 224),)
-    # flops = FlopCountAnalysis(model_ft, input)
-    # print("FLOPs: ", flops.total())
-    # print('-'*30)
+    if args.model in ['ecpnet', 'ecpnetno']:
+        input = (torch.rand(1, 3, 224, 224), torch.rand(1, 1, 4))
+    else:
+        input = (torch.rand(1, 3, 224, 224),)
+
+    '''[1] using fvcore'''
+    from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
+    print(parameter_count_table(model_ft))
+
+    flops = FlopCountAnalysis(model_ft, input)
+    print("FLOPs: {:.2f}G".format(flops.total()/10e9))
+
+    '''[2] using thop'''
+    # from thop import profile
+    # input = torch.randn(1, 3, 224, 224)
+    # macs, params = profile(model_ft, inputs=(input,))
+    # print('The model Params: {:.2f}M, MACs: {:.2f}M'.format(params/10e6, macs/10e6))
+    '''[3] using torchstat'''
+    # from torchstat import stat
     # stat(model_ft, (3, 224, 224))
 
     '''
@@ -587,7 +612,8 @@ if __name__ == '__main__':
     # _, aVal, bVal = Normalize(train_lab)
 
     '''Train and evaluate'''
-    model_ft, train_hist, val_hist, result, RE_history = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft, val_lab, aVal, bVal, num_epochs=num_epochs, is_inception=(model_name=="inception"))
+    model_ft, train_hist, val_hist, result, RE_history = train_model(model_ft, dataloaders_dict,
+        criterion, optimizer_ft, val_lab, aVal, bVal, num_epochs=num_epochs, is_inception=(model_name=="inception"))
 
     #############################################
     '''
@@ -618,17 +644,27 @@ if __name__ == '__main__':
     plt.plot(ts, result, label="pred_lab")
     plt.legend()
     plt.show()
+
     res = np.vstack((val_lab, result))
     res_path = os.path.join(out_path, 'Results_' + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size))
     # np.savetxt(res_path, res.T, fmt='%s')
     save_excel(res.T, res_path + '.xlsx')
 
     #############################################
+    ''' Plot Evaluation result'''
+    ### 逆归一化，输出 val 的‘预测的结果’ ###
+    # test_lab = loadColStr(os.path.join(infile, 'val.txt'), 1)
+    # _, meanVal, stdVal = Normalize(test_lab)
+    # result = InvNormalize(result, meanVal, stdVal)
+
+
     '''
         layered error
     '''
+    print()
     result = np.array(result)
     val_lab = np.array(val_lab)
+    RE_history = np.array(RE_history)
     # writer.add_scalars('Validation/result', {'val_lab': val_lab, 'pred_lab': result}, ts)
     print('[Layered error]')
     error = (result - val_lab) / val_lab
@@ -636,18 +672,28 @@ if __name__ == '__main__':
         np.mean(error), np.max(error), np.min(error), np.std(error)))
 
     '''RMSE, Mae, R^2'''
+    print()
     print('[Statistic error]')
     Rs = mean_squared_error(val_lab, result) ** 0.5
     Mae = mean_absolute_error(val_lab, result)
     R2_s = r2_score(val_lab, result)
-    print('Root mean_squared_error: {:.2f}J | Mean_absolute_error: {:.2f} | R2_score: {:.2f}.'.format(Rs, Mae, R2_s))
+    print('RMSE: {:.2f}J | MAE: {:.2f} | R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
 
     '''total error'''
+    print()
     print('[Total error]')
     E1 = np.sum(val_lab)
     E2 = np.sum(result)
-    Er = np.abs((E1 - E2) / E2)
-    print('Actual EC: {:.2f}J | Predicted EC: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
+    Er = np.abs((E1 - E2) / E1)
+    print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
+
+
+    plt.figure()
+    plt.plot(range(args.epochs), RE_history, label="Er history vs. Epoch")
+    plt.legend()
+    plt.show()
+    RE_path = os.path.join(out_path, 'Er_history')
+    save_excel(RE_history, RE_path + '.xlsx')
 
     '''save error to file'''
     res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er*100]
