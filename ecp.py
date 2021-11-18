@@ -5,7 +5,7 @@ Copyright 2021 Wang Kang
 from __future__ import print_function
 from __future__ import division
 import torch
-
+import torch.nn as nn
 import numpy as np
 from torchvision import datasets, models, transforms
 import matplotlib.pyplot as plt
@@ -15,6 +15,9 @@ import os
 from torch.utils.data import Dataset
 from PIL import Image
 
+import timm as tm
+from timm.models import create_model
+from timm.utils import *
 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
@@ -28,6 +31,267 @@ prefixs = None
 # prefixs = ['A1','A2','B1','B2','C1','C2','D1','D2','E1','E2']
 # prefixs = ['A1','A2','B1','B2','C1','C2', 'D2', 'E1']
 # prefixs = ['A1','B1','C2', 'D2', 'E1']
+
+
+def initialize_model(model_name, num_classes=1, feature_extract=False, use_pretrained=False, drop=0, drop_path=0.1, drop_block=None):
+    # Initialize these variables which will be set in this if statement. Each of these
+    #   variables is model specific.
+    model_ft = None
+    input_size = 0
+
+    if model_name == "resnet":
+        """ Resnet
+        """
+        model_ft = models.resnet18(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.fc.in_features
+        model_ft.fc = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    # if model_name == "resnet":
+    #     """ Resnet34
+    #     """
+    #     model_ft = tm.resnet34(pretrained=use_pretrained)
+    #     set_parameter_requires_grad(model_ft, feature_extract)
+    #     num_ftrs = model_ft.fc.in_features
+    #     model_ft.fc = nn.Linear(num_ftrs, num_classes)
+    #     input_size = 224
+
+    elif model_name == "regnet":
+        """ regnet
+            regnety_040， regnety_080， regnety_160
+        """
+        model_ft = tm.regnety_040(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.get_classifier().in_features
+        model_ft.fc = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "efficientnet_b2":
+        """ 
+            efficientnet_b2 256, efficientnet_b3 288, efficientnet_b4 320
+        """
+        model_ft = tm.efficientnet_b2(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.get_classifier().in_features
+        model_ft.classifier = nn.Linear(num_ftrs, num_classes)
+        input_size = 256
+
+    elif model_name == "efficientnet_b3":
+        """ 
+            efficientnet_b2 256, efficientnet_b3 288, efficientnet_b4 320
+        """
+        model_ft = tm.efficientnet_b3(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.get_classifier().in_features
+        model_ft.classifier = nn.Linear(num_ftrs, num_classes)
+        input_size = 288
+
+    elif model_name == "efficientnet_b4":
+        """ 
+            efficientnet_b2 256, efficientnet_b3 288, efficientnet_b4 320
+        """
+        model_ft = tm.efficientnet_b4(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.get_classifier().in_features
+        model_ft.classifier = nn.Linear(num_ftrs, num_classes)
+        input_size = 320
+
+    elif model_name == "vit":
+        """ vit
+        """
+        model_ft = tm.vit_tiny_patch16_224(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.head.in_features
+        model_ft.head = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "pit":
+        """ pit
+        pit_xs_224, pit_s_224
+        """
+        model_ft = tm.pit_xs_224(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.get_classifier().in_features
+        model_ft.head = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "deit":
+        """ deit
+            deit_small_patch16_224, deit_base_patch16_224
+        """
+        model_ft = tm.deit_small_patch16_224(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.head.in_features
+        model_ft.head = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "mixer":
+        """ mixer
+        """
+        model_ft = tm.mixer_b16_224(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.head.in_features
+        model_ft.head = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "swin-vit":
+        """ swin-vit
+        tm.swin_tiny_patch4_window7_224, tm.swin_small_patch4_window7_224
+        """
+        model_ft = tm.swin_small_patch4_window7_224(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.head.in_features
+        model_ft.head = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "alexnet":
+        """ Alexnet
+        """
+        model_ft = models.alexnet(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.classifier[6].in_features
+        model_ft.classifier[6] = nn.Linear(num_ftrs,num_classes)
+        input_size = 224
+
+    elif model_name == "vgg":
+        """ VGG11_bn
+        """
+        model_ft = models.vgg11_bn(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.classifier[6].in_features
+        model_ft.classifier[6] = nn.Linear(num_ftrs,num_classes)
+        input_size = 224
+
+    elif model_name == "squeezenet":
+        """ Squeezenet
+        """
+        model_ft = models.squeezenet1_0(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        model_ft.classifier[1] = nn.Conv2d(512, num_classes, kernel_size=(1,1), stride=(1,1))
+        model_ft.num_classes = num_classes
+        input_size = 224
+
+    elif model_name == "densenet":
+        """ Densenet
+        """
+        model_ft = models.densenet121(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        num_ftrs = model_ft.classifier.in_features
+        model_ft.classifier = nn.Linear(num_ftrs, num_classes)
+        input_size = 224
+
+    elif model_name == "inception":
+        """ Inception v3 
+        Be careful, expects (299,299) sized images and has auxiliary output
+        """
+        model_ft = models.inception_v3(pretrained=use_pretrained)
+        set_parameter_requires_grad(model_ft, feature_extract)
+        # Handle the auxilary net
+        num_ftrs = model_ft.AuxLogits.fc.in_features
+        model_ft.AuxLogits.fc = nn.Linear(num_ftrs, num_classes)
+        # Handle the primary net
+        num_ftrs = model_ft.fc.in_features
+        model_ft.fc = nn.Linear(num_ftrs,num_classes)
+        input_size = 299
+
+    elif model_name == "conformer":
+        """
+        Conformer_tiny_patch16, Conformer_small_patch16, Conformer_small_patch32, Conformer_base_patch16
+        """
+        model_ft = create_model(
+            "Conformer_base_patch16",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+            drop_rate=drop,
+            drop_path_rate=drop_path,
+            drop_block_rate=drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+
+    elif model_name == "ecpnet":
+        model_ft = create_model(
+            "EcpNet_tiny_patch16",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+            drop_rate=drop,
+            drop_path_rate=drop_path,
+            drop_block_rate=drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+    elif model_name == "ecpnetno":
+        model_ft = create_model(
+            "EcpNet_NoConnect",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+            drop_rate=drop,
+            drop_path_rate=drop_path,
+            drop_block_rate=drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+    elif model_name == "ecpnetlv":
+        model_ft = create_model(
+            "EcpNet_LCIvec",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+            drop_rate=drop,
+            drop_path_rate=drop_path,
+            drop_block_rate=drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+
+    elif model_name == "ecpnetv":
+        model_ft = create_model(
+            "EcpNet_Vec",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+    else:
+        print("Invalid model name, exiting...")
+        exit()
+
+    return model_ft, input_size
+
+
+def set_parameter_requires_grad(model, feature_extracting):
+    if feature_extracting:
+        for param in model.parameters():
+            param.requires_grad = False
 
 
 # use PIL Image to read image
