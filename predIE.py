@@ -57,11 +57,11 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnetlv_2', type=str, metavar='MODEL',
+parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
-parser.add_argument('-b', '--batch-size', type=int, default=240, metavar='N',
+parser.add_argument('-b', '--batch-size', type=int, default=192, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=100, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=50, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -79,16 +79,20 @@ parser.add_argument('--drop-block', type=float, default=None, metavar='PCT',
 def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_epochs=25, is_inception=False):
     since = time.time()
 
+    # log loss history
     train_acc_history = []
     val_acc_history = []
 
+    # log result
     last_result = []
     best_result = []
 
-    RE_history = []
+    # log metrics
+    metrics_history = np.zeros([num_epochs, 3])
 
     best_model_wts = copy.deepcopy(model.state_dict())
 
+    # for record min/max value
     best_epoch = 0
     min_loss = 999999
     min_metric = 999999
@@ -133,7 +137,8 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                     else:
                         if  args.model in ['ecpnet', 'ecpnetlv_1', 'ecpnetlv_2', 'ecpnetno']:
                             outputs = model(inputs, paras)
-                            # outputs = model(paras)
+                        elif args.model in ['ecpnetv']:
+                            outputs = model(paras)
                         else:
                             outputs = model(inputs)
                         if isinstance(outputs, list):
@@ -171,7 +176,7 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 running_loss += loss.item() * inputs.size(0)
 
             '''
-            After training or val one epoch
+            After training or val one epoch completed
             '''
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             print('{} Loss: {:.4f}'.format(phase, epoch_loss))
@@ -184,31 +189,37 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
 
                 # get every epoch error
                 result = InvNormalize(result, aVal, bVal)
+
+                error = np.mean((result - GT) / GT)
+                metrics_history[epoch][1] = error
+
                 Rs = mean_squared_error(GT, result) ** 0.5
                 Mae = mean_absolute_error(GT, result)
                 R2_s = r2_score(GT, result)
-                print('RMSE: {:.2f}J | MAE: {:.2f} | R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
+                print('LME: {:.2%} | RMSE: {:.2f}J | MAE: {:.2f}J | R2_s: {:.2f}.'.format(error, Rs, Mae, R2_s))
+                metrics_history[epoch][0] = Rs
+
                 E1 = np.sum(GT)
                 E2 = np.sum(result)
                 Er = np.abs((E1 - E2) / E1)
                 print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
-                RE_history.append(Er)
+                metrics_history[epoch][2] = Er
 
-                # find best model
-                # if epoch_loss < min_loss:
-                #     min_loss = epoch_loss  # update min_loss
-                #     print('Min loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch+1, num_epochs))
-                #     best_model_wts = copy.deepcopy(model.state_dict())
-                #     best_epoch = epoch
-                #
-                #     # load best model weights, and return
-                #     model.load_state_dict(best_model_wts)
-                if Er < min_metric:
-                    min_metric = Er  # update min_loss
-                    print('Min Er: {:4f} in Epoch {}/{}'.format(Er, epoch+1, num_epochs))
-                    best_model_wts = copy.deepcopy(model.state_dict())
-                    best_epoch = epoch
-                    best_result = result
+                if args.model == 'ecpnet_temp':
+                    if Er < min_metric:
+                        min_metric = Er  # update min_metric
+                        print('[Best model updated] Min_Er: {:4f} in Epoch {}/{}'.format(Er, epoch+1, num_epochs))
+                        best_model_wts = copy.deepcopy(model.state_dict())
+                        best_epoch = epoch
+                        best_result = result
+                else:
+                    if epoch_loss < min_loss:
+                        min_loss = epoch_loss  # update min_loss
+                        print('[Best model updated] Min_loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch+1, num_epochs))
+                        best_model_wts = copy.deepcopy(model.state_dict())
+                        best_epoch = epoch
+                        best_result = result
+
         print()
 
     # After training or val all epochs
@@ -224,7 +235,7 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
     save_path = os.path.join(out_path, 'Best_checkpoint.pth')
     torch.save(best_model_wts, save_path)
 
-    return model, train_acc_history, val_acc_history, best_result, RE_history
+    return model, train_acc_history, val_acc_history, best_result, metrics_history
 
 
 def set_parameter_requires_grad(model, feature_extracting):
@@ -251,7 +262,7 @@ if __name__ == '__main__':
     '''define output path'''
     # t = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     fn = args.data_dir.split('/')[-1]
-    out_path = os.path.join('./outputs', fn, args.model)
+    out_path = os.path.join('./outputs', fn, args.model, 'depth_12')
 
     test_path = os.path.join(out_path, args.eval_phase)
 
@@ -361,7 +372,7 @@ if __name__ == '__main__':
     # _, aVal, bVal = Normalize(train_lab)
 
     '''Train and evaluate'''
-    model_ft, train_hist, val_hist, result, RE_history = train_model(model_ft, dataloaders_dict,
+    model_ft, train_hist, val_hist, result, metrics_history = train_model(model_ft, dataloaders_dict,
         criterion, optimizer_ft, val_lab, aVal, bVal, num_epochs=num_epochs, is_inception=(model_name=="inception"))
 
     #############################################
@@ -406,46 +417,48 @@ if __name__ == '__main__':
     # _, meanVal, stdVal = Normalize(test_lab)
     # result = InvNormalize(result, meanVal, stdVal)
 
-
-    '''
-        layered error
-    '''
-    print()
+    ''' layered error '''
     result = np.array(result)
     val_lab = np.array(val_lab)
-    RE_history = np.array(RE_history)
+    RE_history = metrics_history[:, 1]
     # writer.add_scalars('Validation/result', {'val_lab': val_lab, 'pred_lab': result}, ts)
-    print('[Layered error]')
+
     error = (result - val_lab) / val_lab
-    print('Mean(error): {:.2%} | Max(error): {:.2%} | Min(error): {:.2%} | Std(error): {:.2f}'.format(
-        np.mean(error), np.max(error), np.min(error), np.std(error)))
+    # print()
+    # print('[Layered error]')
+    # print('Mean(error): {:.2%} | Max(error): {:.2%} | Min(error): {:.2%} | Std(error): {:.2f}'.format(
+    #     np.mean(error), np.max(error), np.min(error), np.std(error)))
 
     '''RMSE, Mae, R^2'''
-    print()
-    print('[Statistic error]')
+
     Rs = mean_squared_error(val_lab, result) ** 0.5
     Mae = mean_absolute_error(val_lab, result)
     R2_s = r2_score(val_lab, result)
-    print('RMSE: {:.2f}J | MAE: {:.2f} | R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
+    # print()
+    # print('[Statistic error]')
+    # print('RMSE: {:.2f}J | MAE: {:.2f} | R2_s: {:.2f}.'.format(Rs, Mae, R2_s))
 
     '''total error'''
     print()
-    print('[Total error]')
     E1 = np.sum(val_lab)
     E2 = np.sum(result)
     Er = np.abs((E1 - E2) / E1)
-    print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
+    # print('[Total error]')
+    # print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
 
+    '''Print final metrics'''
+    print('RMSE: {:.2f}J | LME: {:.2%} | Er: {:.2%} '.format(Rs, np.mean(error), Er))
 
     plt.figure()
     plt.plot(range(args.epochs), RE_history, label="Er history vs. Epoch")
     plt.legend()
     plt.show()
-    RE_path = os.path.join(out_path, 'Er_history')
-    save_excel(RE_history, RE_path + '.xlsx')
+
+    metrics_path = os.path.join(out_path, 'Ms_history')
+    save_excel(metrics_history, metrics_path + '.xlsx')
 
     '''save error to file'''
-    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er*100]
+    res_error = [np.mean(error), np.max(error), np.min(error), np.std(error), Rs, Mae, R2_s, E1, E2, Er]
     error_path = os.path.join(out_path, 'Error_' + str(num_epochs) + "_" + str(lr) + "_" + str(batch_size))
     # np.savetxt(error_path, np.array(res_error), fmt='%s')
     save_excel(res_error, error_path+'.xlsx')

@@ -19,7 +19,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image, \
     preprocess_image
 from collections import OrderedDict
 
-from predIE import initialize_model
+from ecp_utils import initialize_model
 
 
 def get_args():

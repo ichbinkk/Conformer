@@ -336,10 +336,12 @@ class customData(Dataset):
                 #     continue
                 self.img_name.append(os.path.join(img_path, img_name))
                 self.img_label.append(float(ls[1]))
+
+                '''read different Vec'''
                 #[1] read all Vec for ecpnet
-                # self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
+                self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
                 #[2] read choosed vec for ablation study
-                self.params.append([float(ls[4]), float(ls[5])])
+                # self.params.append([float(ls[2]), float(ls[3])])
         y = self.img_label
         y,_,_ = Normalize(y)
         print('[' + dataset+ ']')
@@ -561,7 +563,8 @@ def eval_EC(model_name, model_ft, save_path, infile, phase, batch_size=16, input
 def save_excel(data, file):
     writer = pd.ExcelWriter(file)  # 写入Excel文件
     data = pd.DataFrame(data)
-    data.to_excel(writer, sheet_name='Sheet1', float_format='%.2f', header=False, index=False)
+    # data.to_excel(writer, sheet_name='Sheet1', float_format='%.2f', header=False, index=False)
+    data.to_excel(writer, sheet_name='Sheet1', header=False, index=False)
     writer.save()
     writer.close()
 
