@@ -251,7 +251,25 @@ def initialize_model(model_name, num_classes=1, feature_extract=False, use_pretr
             param.requires_grad = True  # it was require_grad
         input_size = 224
 
-    elif model_name == "ecpnetlv":
+    elif model_name == "ecpnetlv_1":  # for first choosed dataset
+        model_ft = create_model(
+            "EcpNet_LCIvec",
+            pretrained=use_pretrained,
+            num_classes=num_classes,
+            drop_rate=drop,
+            drop_path_rate=drop_path,
+            drop_block_rate=drop_block,
+        )
+        set_parameter_requires_grad(model_ft, feature_extract)
+        for param in model_ft.conv_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.trans_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        for param in model_ft.mlp_cls_head.parameters():
+            param.requires_grad = True  # it was require_grad
+        input_size = 224
+
+    elif model_name == "ecpnetlv_2":  # for second choosed dataset
         model_ft = create_model(
             "EcpNet_LCIvec",
             pretrained=use_pretrained,
@@ -318,8 +336,10 @@ class customData(Dataset):
                 #     continue
                 self.img_name.append(os.path.join(img_path, img_name))
                 self.img_label.append(float(ls[1]))
-                self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
-                # self.params.append([float(ls[2]), float(ls[3])])
+                #[1] read all Vec for ecpnet
+                # self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
+                #[2] read choosed vec for ablation study
+                self.params.append([float(ls[4]), float(ls[5])])
         y = self.img_label
         y,_,_ = Normalize(y)
         print('[' + dataset+ ']')

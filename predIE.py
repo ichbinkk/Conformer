@@ -34,7 +34,7 @@ from sklearn.metrics import r2_score
 
 from timm.models import create_model
 import models
-from ecp import *
+from ecp_utils import *
 
 
 # Number of classes in the dataset
@@ -57,11 +57,11 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnetno', type=str, metavar='MODEL',
+parser.add_argument('--model', default='ecpnetlv_2', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
 parser.add_argument('-b', '--batch-size', type=int, default=240, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=300, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -131,7 +131,7 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                         loss2 = criterion(aux_outputs, labels)
                         loss = loss1 + 0.4 * loss2
                     else:
-                        if 'ecpnet' in args.model:
+                        if  args.model in ['ecpnet', 'ecpnetlv_1', 'ecpnetlv_2', 'ecpnetno']:
                             outputs = model(inputs, paras)
                             # outputs = model(paras)
                         else:
@@ -268,11 +268,11 @@ if __name__ == '__main__':
         input = (torch.rand(1, 3, 224, 224),)
 
     '''[1] using fvcore'''
-    from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
-    print(parameter_count_table(model_ft))
-
-    flops = FlopCountAnalysis(model_ft, input)
-    print("FLOPs: {:.2f}G".format(flops.total()/10e9))
+    # from fvcore.nn import FlopCountAnalysis, parameter_count_table, parameter_count
+    # print(parameter_count_table(model_ft))
+    #
+    # flops = FlopCountAnalysis(model_ft, input)
+    # print("FLOPs: {:.2f}G".format(flops.total()/10e9))
 
     '''[2] using thop'''
     # from thop import profile
