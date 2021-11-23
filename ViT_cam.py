@@ -19,6 +19,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image, \
     preprocess_image
 from collections import OrderedDict
 
+
 from ecp_utils import initialize_model
 
 
@@ -27,16 +28,16 @@ def get_args():
     # Dataset / Model parameters
     parser.add_argument('--output_dir', metavar='DIR', default='./cam',
                         help='path to output')
-    parser.add_argument('--model', default='swin-vit', type=str, metavar='MODEL',
+    parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                         help='Name of model to train (default: "resnet18"')
-    parser.add_argument('--pth_dir', metavar='DIR', default='./output/lattice_ec',
+    parser.add_argument('--pth_dir', metavar='DIR', default='./outputs/lattice_ec',
                         help='path to pth file')
     parser.add_argument('--use-cuda', action='store_true', default=False,
                         help='Use NVIDIA GPU acceleration')
     parser.add_argument(
         '--image-path',
         type=str,
-        default='./input_images/B1-48.png',
+        default='./input_images/A3-5.png',
         help='Input image path')
     parser.add_argument('--aug_smooth', action='store_true',
                         help='Apply test time augmentation to smooth the CAM')
@@ -120,11 +121,13 @@ if __name__ == '__main__':
         target_layers = [model.blocks[-2][0]]
     elif args.model in ['swin-vit']:
         target_layers = [model.blocks[-1].norm1]
+    elif args.model in ['ecpnet']:
+        target_layers = [model.conv_trans_12.trans_block.norm2]
 
     if args.method not in methods:
         raise Exception(f"Method {args.method} not implemented")
 
-    trans_net = ['swin-vit']
+    trans_net = ['swin-vit','ecpnet']
     if args.model in trans_net:
         cam = methods[args.method](model=model,
                                    target_layers=target_layers,

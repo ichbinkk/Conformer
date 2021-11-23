@@ -18,6 +18,7 @@ from PIL import Image
 import timm as tm
 from timm.models import create_model
 from timm.utils import *
+import models
 
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
