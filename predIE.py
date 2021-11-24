@@ -59,9 +59,9 @@ alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
 parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
-parser.add_argument('-b', '--batch-size', type=int, default=192, metavar='N',
+parser.add_argument('-b', '--batch-size', type=int, default=240, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=50, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=5, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -205,20 +205,16 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 print('GT: {:.2f}J | ECP: {:.2f}J | Er: {:.2%}'.format(E1, E2, Er))
                 metrics_history[epoch][2] = Er
 
-                if args.model == 'ecpnet_temp':
-                    if Er < min_metric:
-                        min_metric = Er  # update min_metric
-                        print('[Best model updated] Min_Er: {:4f} in Epoch {}/{}'.format(Er, epoch+1, num_epochs))
-                        best_model_wts = copy.deepcopy(model.state_dict())
-                        best_epoch = epoch
-                        best_result = result
-                else:
-                    if epoch_loss < min_loss:
-                        min_loss = epoch_loss  # update min_loss
-                        print('[Best model updated] Min_loss: {:4f} in Epoch {}/{}'.format(min_loss, epoch+1, num_epochs))
-                        best_model_wts = copy.deepcopy(model.state_dict())
-                        best_epoch = epoch
-                        best_result = result
+                """ 
+                    Choose the best model
+                """
+                epoch_metric = Rs
+                if epoch_metric < min_metric:
+                    min_metric = epoch_metric  # update min_loss
+                    print('[Best model updated] Min_metric: {:4f} in Epoch {}/{}'.format(min_metric, epoch+1, num_epochs))
+                    best_model_wts = copy.deepcopy(model.state_dict())
+                    best_epoch = epoch
+                    best_result = result
 
         print()
 
@@ -262,7 +258,7 @@ if __name__ == '__main__':
     '''define output path'''
     # t = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     fn = args.data_dir.split('/')[-1]
-    out_path = os.path.join('./outputs', fn, args.model, 'depth_12')
+    out_path = os.path.join('./outputs', fn, args.model)
 
     test_path = os.path.join(out_path, args.eval_phase)
 

@@ -98,7 +98,7 @@ def initialize_model(model_name, num_classes=1, feature_extract=False, use_pretr
         model_ft.classifier = nn.Linear(num_ftrs, num_classes)
         input_size = 320
 
-    elif model_name == "vit":
+    elif model_name == "vit_t":
         """ vit
         """
         model_ft = tm.vit_tiny_patch16_224(pretrained=use_pretrained)
