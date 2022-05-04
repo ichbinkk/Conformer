@@ -33,7 +33,7 @@ from sklearn.metrics import r2_score
 # from torchstat import stat
 
 from timm.models import create_model
-import models
+# import models
 from ecp_utils import *
 
 
@@ -57,11 +57,11 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnetno', type=str, metavar='MODEL',
-                    help='Name of model to train (default: "resnet"')
+parser.add_argument('--model', default='resnet18', type=str, metavar='MODEL',
+                    help='Name of model to train (default: "resnet18"')
 parser.add_argument('-b', '--batch-size', type=int, default=192, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=50, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=10, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -238,9 +238,6 @@ def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
         for param in model.parameters():
             param.requires_grad = False
-
-
-
 
 
 if __name__ == '__main__':

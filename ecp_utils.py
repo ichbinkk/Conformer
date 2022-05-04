@@ -40,7 +40,7 @@ def initialize_model(model_name, num_classes=1, feature_extract=False, use_pretr
     model_ft = None
     input_size = 0
 
-    if model_name == "resnet":
+    if model_name == "resnet18":
         """ Resnet
         """
         model_ft = models.resnet18(pretrained=use_pretrained)
