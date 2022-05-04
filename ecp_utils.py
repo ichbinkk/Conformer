@@ -341,8 +341,10 @@ class customData(Dataset):
                 '''read different Vec'''
                 #[1] read all Vec for ecpnet
                 self.params.append([float(ls[2]), float(ls[3]), float(ls[4]), float(ls[5])])
-                #[2] read choosed vec for ablation study
+                #[2] read choosed vec for ecpnetlv_1
                 # self.params.append([float(ls[2]), float(ls[3])])
+                #[3] read choosed vec for ecpnetlv_2
+                # self.params.append([float(ls[4]), float(ls[5])])
         y = self.img_label
         y,_,_ = Normalize(y)
         print('[' + dataset+ ']')

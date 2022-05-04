@@ -48,7 +48,7 @@ parm = {}  # 初始化保存模块参数的parm字典
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
 # Dataset / Model parameters
-parser.add_argument('--data_dir', metavar='DIR', default='../dataset/lattice_ec',
+parser.add_argument('--data_dir', metavar='DIR', default='../dataset/V3_ec',
                     help='path to dataset')
 parser.add_argument('--eval_phase', default='test', type=str, metavar='NAME',
                     help='Phase of eval dataset (default: )')
@@ -57,11 +57,11 @@ Setting model and training params, some can use parser to get value.
 Models to choose from [resnet, regnet, efficientnet, vit, pit, mixer, deit, swin-vit
 alexnet, vgg, squeezenet, densenet, inception, Conformer_tiny_patch16, ecpnet]
 '''
-parser.add_argument('--model', default='ecpnet', type=str, metavar='MODEL',
+parser.add_argument('--model', default='ecpnetno', type=str, metavar='MODEL',
                     help='Name of model to train (default: "resnet"')
-parser.add_argument('-b', '--batch-size', type=int, default=240, metavar='N',
+parser.add_argument('-b', '--batch-size', type=int, default=192, metavar='N',
                     help='input batch size for training (default: 32)')
-parser.add_argument('-e', '--epochs', type=int, default=5, metavar='N',
+parser.add_argument('-e', '--epochs', type=int, default=50, metavar='N',
                     help='number of epochs to train (default: )')
 parser.add_argument('--use-pretrained', action='store_true', default=False,
                     help='Flag to use fine tuneing(default: False)')
@@ -206,7 +206,7 @@ def train_model(model, dataloaders, criterion, optimizer, GT, aVal, bVal, num_ep
                 metrics_history[epoch][2] = Er
 
                 """ 
-                    Choose the best model
+                    Choose the best model using various metrics
                 """
                 epoch_metric = Rs
                 if epoch_metric < min_metric:
@@ -259,6 +259,7 @@ if __name__ == '__main__':
     # t = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     fn = args.data_dir.split('/')[-1]
     out_path = os.path.join('./outputs', fn, args.model)
+    # out_path = os.path.join(out_path,'depth_15')
 
     test_path = os.path.join(out_path, args.eval_phase)
 
